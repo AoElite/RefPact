@@ -4,6 +4,10 @@ Architecture tests for TypeScript 6 and 7: rules about what files may import, ch
 ordinary tests under Vitest or `node --test`. The compiler of your project resolves each
 import.
 
+```sh
+pnpm add --save-dev @aoelite/refpact
+```
+
 ```ts
 import { test } from "vitest";
 import { anyOf, loadProject, pkg, rule } from "@aoelite/refpact";

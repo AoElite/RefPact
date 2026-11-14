@@ -21,6 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # No step pushes, so the token does not stay in the git configuration.
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           # A load from disk runs rust-analyzer to resolve method calls.
@@ -37,6 +40,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # No step pushes, so the token does not stay in the git configuration.
+          persist-credentials: false
       # Keep the version the same as rust-version in Cargo.toml. Only the libraries: the
       # tests may use newer Rust.
       - uses: dtolnay/rust-toolchain@1.80
@@ -52,6 +58,9 @@ jobs:
         node: [22, 24, 26]
     steps:
       - uses: actions/checkout@v7
+        with:
+          # No step pushes, so the token does not stay in the git configuration.
+          persist-credentials: false
       # The package runs the core of the crate refpact-core, built as WebAssembly.
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -79,6 +88,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # No step pushes, so the token does not stay in the git configuration.
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v6
@@ -99,6 +111,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # No step pushes, so the token does not stay in the git configuration.
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
