@@ -1,0 +1,19 @@
+target/
+node_modules/
+dist/
+# The core as WebAssembly, built by `cargo xtask wasm`
+packages/refpact/wasm/
+*.tsbuildinfo
+out/
+packages/.refpact-mutation-*/
+
+# Editor and local tool state
+.idea
+.vscode
+# Local state of Claude Code, in any directory
+.claude/
+# Personal MCP server configuration, which can hold tokens and local paths
+.mcp.json
+
+# A pnpm store that pnpm makes beside the project when it cannot link from the global one
+.pnpm-store/

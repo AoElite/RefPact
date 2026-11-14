@@ -1,0 +1,36 @@
+{
+  "description": "`must_only_use`: every reference of the subjects must lead to an allowed target, or stay inside its own unit.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate", "crate::domain", "crate::domain::model", "crate::infra", "crate::facade", "crate::app"],
+    "items": ["crate::domain::Order", "crate::infra::Db", "crate::facade::Thing"],
+    "kinds": ["use", "expr"],
+    "tags": ["test"],
+    "facts": [
+      {"unit": "crate::domain", "file": "crate/domain.rs", "line": 1, "reference": {"target": "std::fmt", "kind": "use"}},
+      {"unit": "crate::domain", "file": "crate/domain.rs", "line": 2, "reference": {"target": "crate::infra::Db", "kind": "use"}},
+      {"unit": "crate::domain", "file": "crate/domain.rs", "line": 3, "reference": {"target": "crate::domain::Order", "kind": "expr"}},
+      {"unit": "crate::domain", "file": "crate/domain.rs", "line": 4, "reference": {"target": "crate::facade::Thing", "kind": "use", "aliases": ["crate::infra::Db"]}},
+      {"unit": "crate::domain", "file": "crate/domain.rs", "line": 5, "reference": {"target": "serde::Serialize", "kind": "use", "certainty": "candidate"}},
+      {"unit": "crate::domain", "file": "crate/domain.rs", "line": 6, "reference": {"target": "crate::infra::Db", "kind": "expr"}, "tags": ["test"]},
+      {"unit": "crate::domain", "file": "crate/domain.rs", "line": 7, "reference": {"target": "crate::domain::Order", "kind": "expr", "aliases": ["crate::infra::Db"]}},
+      {"unit": "crate::domain::model", "file": "crate/domain/model.rs", "line": 1, "reference": {"target": "crate::domain::Order", "kind": "use"}},
+      {"unit": "crate::app", "file": "crate/app.rs", "line": 1, "reference": {"target": "crate::infra::Db", "kind": "use"}}
+    ]
+  },
+  "cases": [
+    {"name": "every reference that is not allowed is a violation", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": ["std"]}}, "expect": {"violations": [{"line": 2, "target": "crate::infra::Db", "written": null, "kind": "use"}, {"line": 4, "target": "crate::facade::Thing", "written": null}, {"line": 5, "certainty": "candidate"}, {"line": 6}]}},
+    {"name": "a unit may use itself", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": ["std", "crate::infra", "crate::facade", "serde"]}}, "expect": {"violations": []}},
+    {"name": "a reference is allowed when the definition behind it is allowed", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": ["std", "crate::infra"]}}, "expect": {"violations": [{"line": 5}]}},
+    {"name": "a reference is allowed when the name in the code is allowed", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": ["std", "crate::facade", "serde"]}}, "expect": {"violations": [{"line": 2}, {"line": 6}]}},
+    {"name": "a second allowed target does not allow more than itself", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": ["std", "serde"]}}, "expect": {"violations": [{"line": 2}, {"line": 4}, {"line": 6}]}},
+    {"name": "the parent of a unit is not the unit", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain::model"]}, "must_only_use": {"any_of": ["std"]}}, "expect": {"violations": [{"unit": "crate::domain::model", "line": 1, "target": "crate::domain::Order"}]}},
+    {"name": "all subjects", "rule": {"name": "r", "subjects": {"all": true}, "must_only_use": {"any_of": ["std", "crate"]}}, "expect": {"violations": [{"unit": "crate::domain", "line": 5}]}},
+    {"name": "candidates can be left out", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": ["std", "crate::infra"]}, "candidates": "ignore"}, "expect": {"violations": []}},
+    {"name": "tags and kinds filter as in must_not_use", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": ["std"]}, "kinds": {"only": ["use"]}, "ignore_tags": ["test"]}, "expect": {"violations": [{"line": 2}, {"line": 4}, {"line": 5}]}},
+    {"name": "unverified targets are allowed and not checked", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": ["std"], "unverified": ["crate::generated", "serde"]}}, "expect": {"violations": [{"line": 2}, {"line": 4}, {"line": 6}]}},
+    {"name": "an empty allow-list is an error", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": []}}, "expect": {"errors": [{"code": "empty-list", "role": "target"}]}},
+    {"name": "an allowed target that matches nothing is an error", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": ["std", "crate::nope"]}}, "expect": {"errors": [{"code": "pattern-matches-nothing", "role": "target", "value": "crate::nope"}]}},
+    {"name": "an invalid allowed target is an error", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "must_only_use": {"any_of": [["a**"]]}}, "expect": {"errors": [{"code": "invalid-pattern", "role": "target", "value": "a**"}]}}
+  ]
+}

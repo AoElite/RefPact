@@ -1,0 +1,19 @@
+{
+  "name": "fixture-planted",
+  "version": "0.0.0",
+  "private": true,
+  "imports": {
+    "#internal/*": "./src/internal/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@fixture/scoped": "workspace:*",
+    "fakepkg": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  }
+}

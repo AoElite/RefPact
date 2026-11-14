@@ -1,0 +1,14 @@
+# A crate with code for several platforms and behind a feature, for the `cfg` conditions.
+[package]
+name = "platforms"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[features]
+tls = []
+
+[dependencies]
+cfg_if = { path = "../stubs/cfg_if" }
+
+[workspace]

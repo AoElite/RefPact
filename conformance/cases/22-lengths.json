@@ -1,0 +1,415 @@
+{
+ "description": "`must_not_exceed_lines` and `not_exceed_lines`: a unit or an item must not have more lines than a limit.",
+ "separator": "::",
+ "facts": {
+  "units": [
+   "crate",
+   "crate::api",
+   "crate::domain",
+   "crate::util"
+  ],
+  "unit_lines": [
+   10,
+   120,
+   40
+  ],
+  "kinds": [
+   "use"
+  ],
+  "tags": [
+   "test"
+  ],
+  "item_kinds": [
+   "struct",
+   "fn"
+  ],
+  "visibilities": [
+   "pub"
+  ],
+  "relations": [],
+  "facts": [
+   {
+    "unit": "crate::api",
+    "file": "src/api.rs",
+    "line": 1,
+    "reference": {
+     "target": "crate::domain::Order",
+     "kind": "use"
+    }
+   }
+  ],
+  "declarations": [
+   {
+    "path": "crate::api::serve",
+    "name": "serve",
+    "unit": "crate::api",
+    "file": "src/api.rs",
+    "line": 10,
+    "kind": "fn",
+    "visibility": "pub",
+    "end_line": 70
+   },
+   {
+    "path": "crate::api::route",
+    "name": "route",
+    "unit": "crate::api",
+    "file": "src/api.rs",
+    "line": 80,
+    "kind": "fn",
+    "visibility": "pub",
+    "end_line": 84
+   },
+   {
+    "path": "crate::api::long_test",
+    "name": "long_test",
+    "unit": "crate::api",
+    "file": "src/api.rs",
+    "line": 90,
+    "kind": "fn",
+    "visibility": "pub",
+    "end_line": 119,
+    "tags": [
+     "test"
+    ]
+   },
+   {
+    "path": "crate::domain::Order",
+    "name": "Order",
+    "unit": "crate::domain",
+    "file": "src/domain.rs",
+    "line": 3,
+    "kind": "struct",
+    "visibility": "pub",
+    "end_line": 22
+   },
+   {
+    "path": "crate::domain::total",
+    "name": "total",
+    "unit": "crate::domain",
+    "file": "src/domain.rs",
+    "line": 30,
+    "kind": "fn",
+    "visibility": "pub",
+    "end_line": 30
+   },
+   {
+    "path": "crate::util::helper",
+    "name": "helper",
+    "unit": "crate::util",
+    "file": "src/util.rs",
+    "line": 1,
+    "kind": "fn",
+    "visibility": "pub"
+   }
+  ]
+ },
+ "cases": [
+  {
+   "name": "a unit with more lines than the limit is reported",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "all": true
+    },
+    "must_not_exceed_lines": {
+     "lines": 100
+    }
+   },
+   "expect": {
+    "violations": [
+     {
+      "unit": "crate::api",
+      "file": "src/api.rs",
+      "line": 0,
+      "column": 0,
+      "detail": "too-long",
+      "lines": 120,
+      "limit": 100
+     }
+    ]
+   }
+  },
+  {
+   "name": "a unit with as many lines as the limit is not reported",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "all": true
+    },
+    "must_not_exceed_lines": {
+     "lines": 120
+    }
+   },
+   "expect": {
+    "violations": []
+   }
+  },
+  {
+   "name": "each unit that is too long is reported, in the order of the units, and a unit without facts has the file of a declaration",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "all": true
+    },
+    "must_not_exceed_lines": {
+     "lines": 9
+    }
+   },
+   "expect": {
+    "violations": [
+     {
+      "unit": "crate",
+      "lines": 10,
+      "file": ""
+     },
+     {
+      "unit": "crate::api",
+      "lines": 120,
+      "file": "src/api.rs"
+     },
+     {
+      "unit": "crate::domain",
+      "lines": 40,
+      "file": "src/domain.rs"
+     }
+    ]
+   }
+  },
+  {
+   "name": "only the selected units are checked",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "any_of": [
+      "crate::domain"
+     ]
+    },
+    "must_not_exceed_lines": {
+     "lines": 9
+    }
+   },
+   "expect": {
+    "violations": [
+     {
+      "unit": "crate::domain",
+      "detail": "too-long",
+      "lines": 40,
+      "limit": 9
+     }
+    ]
+   }
+  },
+  {
+   "name": "a unit whose lines are not counted is not reported",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "any_of": [
+      "crate::domain",
+      "crate::util"
+     ]
+    },
+    "must_not_exceed_lines": {
+     "lines": 0
+    }
+   },
+   "expect": {
+    "violations": [
+     {
+      "unit": "crate::domain"
+     }
+    ]
+   }
+  },
+  {
+   "name": "without a selected unit whose lines are counted, the rule cannot fail",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "any_of": [
+      "crate::util"
+     ]
+    },
+    "must_not_exceed_lines": {
+     "lines": 0
+    }
+   },
+   "expect": {
+    "errors": [
+     {
+      "code": "no-subjects"
+     }
+    ]
+   }
+  },
+  {
+   "name": "an item with more lines than the limit is reported at its name",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "all": true
+    },
+    "items": {
+     "must": {
+      "not_exceed_lines": 50
+     }
+    }
+   },
+   "expect": {
+    "violations": [
+     {
+      "unit": "crate::api",
+      "file": "src/api.rs",
+      "line": 10,
+      "column": 1,
+      "detail": "too-long",
+      "item": "crate::api::serve",
+      "item_kind": "fn",
+      "lines": 61,
+      "limit": 50
+     }
+    ]
+   }
+  },
+  {
+   "name": "the lines of an item are counted from the line of its name to its end line",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "all": true
+    },
+    "items": {
+     "must": {
+      "not_exceed_lines": 5
+     }
+    }
+   },
+   "expect": {
+    "violations": [
+     {
+      "item": "crate::api::serve",
+      "lines": 61
+     },
+     {
+      "item": "crate::api::long_test",
+      "lines": 30
+     },
+     {
+      "item": "crate::domain::Order",
+      "lines": 20
+     }
+    ]
+   }
+  },
+  {
+   "name": "an item with as many lines as the limit is not reported",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "all": true
+    },
+    "items": {
+     "must": {
+      "not_exceed_lines": 61
+     }
+    }
+   },
+   "expect": {
+    "violations": []
+   }
+  },
+  {
+   "name": "an item on one line has one line",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "any_of": [
+      "crate::domain"
+     ]
+    },
+    "items": {
+     "must": {
+      "not_exceed_lines": 0
+     },
+     "kinds": [
+      "fn"
+     ]
+    }
+   },
+   "expect": {
+    "violations": [
+     {
+      "item": "crate::domain::total",
+      "lines": 1,
+      "limit": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "the filters of a rule about items select the items that are measured",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "all": true
+    },
+    "items": {
+     "must": {
+      "not_exceed_lines": 10
+     },
+     "kinds": [
+      "fn"
+     ]
+    },
+    "ignore_tags": [
+     "test"
+    ]
+   },
+   "expect": {
+    "violations": [
+     {
+      "item": "crate::api::serve"
+     }
+    ]
+   }
+  },
+  {
+   "name": "an item without an end line is not reported",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "any_of": [
+      "crate::util"
+     ]
+    },
+    "items": {
+     "must": {
+      "not_exceed_lines": 0
+     }
+    }
+   },
+   "expect": {
+    "violations": []
+   }
+  },
+  {
+   "name": "a baseline counts a long unit and a long item by their names, not by their lines",
+   "rule": {
+    "name": "r",
+    "subjects": {
+     "all": true
+    },
+    "items": {
+     "must": {
+      "not_exceed_lines": 50
+     }
+    }
+   },
+   "baseline": "r\tcrate::api\tlong item crate::api::serve\t1\n",
+   "expect": {
+    "violations": [],
+    "stale": []
+   }
+  }
+ ]
+}

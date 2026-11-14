@@ -1,0 +1,25 @@
+[package]
+name = "shop-api"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[features]
+derive = ["dep:derives"]
+
+[dependencies]
+shop-domain = { path = "../domain" }
+facade = { path = "../../stubs/facade" }
+random = { package = "rand", path = "../../stubs/rand" }
+derives = { path = "../../stubs/derives", optional = true }
+
+[dev-dependencies]
+logkit = { path = "../../stubs/logkit" }
+# The tests of the api run the cli. Cargo allows such a circle for the tests.
+shop-cli = { path = "../cli" }
+
+[build-dependencies.cfg_if]
+path = "../../stubs/cfg_if"
+
+[target.'cfg(windows)'.dependencies]
+getrandom = { path = "../../stubs/getrandom" }

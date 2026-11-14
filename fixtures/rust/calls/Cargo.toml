@@ -1,0 +1,5 @@
+# A workspace for the calls that rust-analyzer resolves: method calls, field accesses and `Self::name`, whose
+# targets only the types say.
+[workspace]
+resolver = "2"
+members = ["domain", "app"]

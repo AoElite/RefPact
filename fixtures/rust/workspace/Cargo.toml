@@ -1,0 +1,7 @@
+# The workspace fixture: three crates that use each other, and one directory that is left out.
+[workspace]
+resolver = "2"
+members = [
+    "crates/*", # all crates
+]
+exclude = ["crates/ignored"]

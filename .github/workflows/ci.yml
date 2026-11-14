@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # A load from disk runs rust-analyzer to resolve method calls.
+          components: rustfmt, clippy, rust-analyzer
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The fixture test runs `cargo check --offline` on the fixtures, which depend only on
+      # the stub crates in fixtures/rust/stubs.
+      - run: cargo test --workspace
+
+  msrv:
+    name: Rust 1.80 (minimum supported)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Keep the version the same as rust-version in Cargo.toml. Only the libraries: the
+      # tests may use newer Rust.
+      - uses: dtolnay/rust-toolchain@1.80
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --lib --locked
+
+  typescript:
+    name: TypeScript (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
+    steps:
+      - uses: actions/checkout@v7
+      # The package runs the core of the crate refpact-core, built as WebAssembly.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      # Build, the package tests with TypeScript 7.0, and the fixture app under Vitest and
+      # node --test.
+      - run: pnpm test
+      - name: Package tests with TypeScript 6
+        run: pnpm --filter refpact test:ts6
+      - name: Package tests with TypeScript 7.1 (beta)
+        run: pnpm --filter refpact test:ts71
+
+  docs:
+    name: API references
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The crate warns on a public item without a doc comment; here that is an error.
+      - run: pnpm api-docs
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  mutations:
+    name: Mutation check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rust-analyzer
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The task builds with --offline. This downloads the crates first, and builds the
+      # tests once so that its copies start from the compiled dependencies.
+      - run: cargo test --workspace --no-run
+      # The TypeScript copies take the core as it is built here.
+      - run: cargo xtask wasm
+      - run: cargo xtask mutants

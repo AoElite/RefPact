@@ -1,0 +1,13 @@
+[package]
+name = "refpact-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+refpact-core = { path = "../refpact-core" }

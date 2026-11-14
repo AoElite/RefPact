@@ -1,0 +1,55 @@
+{
+  "name": "refpact",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Architecture tests for TypeScript 6 and 7: rules about what files may import, checked as ordinary tests.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AoElite/RefPact.git",
+    "directory": "packages/refpact"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "wasm"
+  ],
+  "keywords": [
+    "architecture",
+    "architecture-tests",
+    "testing",
+    "dependencies",
+    "imports",
+    "boundaries",
+    "layers",
+    "cycles",
+    "archunit",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "build": "cargo xtask wasm && node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && node node_modules/typescript/bin/tsc -p tsconfig.build.json",
+    "test": "cargo xtask wasm && vitest run",
+    "test:ts6": "cargo xtask wasm && REFPACT_TYPESCRIPT=typescript-6 vitest run",
+    "test:ts71": "cargo xtask wasm && REFPACT_TYPESCRIPT=typescript-71 vitest run",
+    "typecheck": "node node_modules/typescript/bin/tsc --noEmit"
+  },
+  "peerDependencies": {
+    "typescript": ">=6.0.3 <7.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "typescript-6": "npm:typescript@6.0.3",
+    "typescript-71": "npm:typescript@7.1.0-beta",
+    "vitest": "5.1.0"
+  }
+}

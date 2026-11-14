@@ -1,0 +1,15 @@
+[package]
+name = "planted"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+rand = { path = "../stubs/rand" }
+rand_core = { path = "../stubs/rand_core" }
+getrandom = { path = "../stubs/getrandom" }
+logkit = { path = "../stubs/logkit" }
+tracekit = { path = "../stubs/tracekit" }
+cfg_if = { path = "../stubs/cfg_if" }
+
+[workspace]

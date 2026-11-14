@@ -1,0 +1,42 @@
+{
+  "description": "`items` with a demand about uses: the references inside the selected declarations, and the reason of a rule.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate", "crate::api", "crate::db", "crate::domain"],
+    "items": ["crate::db::Pool", "crate::db::Id", "crate::domain::Order", "crate::domain::price", "crate::api::Handler"],
+    "kinds": ["use", "type", "expr"],
+    "tags": ["test"],
+    "item_kinds": ["struct", "fn", "field", "method"],
+    "visibilities": ["pub", "private"],
+    "relations": ["derives"],
+    "facts": [
+      {"unit": "crate::domain", "file": "src/domain.rs", "line": 1, "reference": {"target": "crate::db::Pool", "kind": "use"}},
+      {"unit": "crate::domain", "file": "src/domain.rs", "line": 4, "item": "crate::domain::Order::id", "reference": {"target": "crate::db::Id", "kind": "type"}},
+      {"unit": "crate::domain", "file": "src/domain.rs", "line": 7, "item": "crate::domain::price", "reference": {"target": "std::fmt::Display", "kind": "type"}},
+      {"unit": "crate::domain", "file": "src/domain.rs", "line": 8, "item": "crate::domain::price", "reference": {"target": "crate::domain::Order", "kind": "type"}},
+      {"unit": "crate::db", "file": "src/db.rs", "line": 3, "item": "crate::domain::Order::save", "reference": {"target": "crate::db::Pool", "kind": "expr"}},
+      {"unit": "crate::api", "file": "src/api.rs", "line": 2, "item": "crate::api::Handler", "tags": ["test"], "reference": {"target": "crate::db::Pool", "kind": "type"}}
+    ],
+    "declarations": [
+      {"path": "crate::domain::Order", "name": "Order", "unit": "crate::domain", "file": "src/domain.rs", "line": 3, "kind": "struct", "visibility": "pub", "relations": [{"relation": "derives", "target": "serde::Serialize"}]},
+      {"path": "crate::domain::Order::id", "name": "id", "unit": "crate::domain", "file": "src/domain.rs", "line": 4, "kind": "field", "visibility": "pub"},
+      {"path": "crate::domain::price", "name": "price", "unit": "crate::domain", "file": "src/domain.rs", "line": 6, "kind": "fn", "visibility": "pub"},
+      {"path": "crate::domain::Order::save", "name": "save", "unit": "crate::db", "file": "src/db.rs", "line": 2, "kind": "method", "visibility": "pub"},
+      {"path": "crate::api::Handler", "name": "Handler", "unit": "crate::api", "file": "src/api.rs", "line": 1, "kind": "struct", "visibility": "pub"}
+    ]
+  },
+  "cases": [
+    {"name": "the code inside the selected items must not use a target", "rule": {"name": "r", "subjects": {"all": true}, "items": {"related": [{"relation": "derives", "any_of": ["serde::Serialize"]}], "must": {"not_use": {"any_of": ["crate::db"]}}}}, "expect": {"violations": [{"unit": "crate::domain", "file": "src/domain.rs", "line": 4, "detail": "uses", "item": "crate::domain::Order::id", "target": "crate::db::Id", "kind": "type"}, {"unit": "crate::db", "file": "src/db.rs", "line": 3, "detail": "uses", "item": "crate::domain::Order::save", "target": "crate::db::Pool", "kind": "expr"}]}},
+    {"name": "a declaration selects the code of the members below its path", "rule": {"name": "r", "subjects": {"any_of": ["crate::domain"]}, "items": {"named": ["Order"], "must": {"not_use": {"any_of": ["crate::db::Id"]}}}}, "expect": {"violations": [{"item": "crate::domain::Order::id", "target": "crate::db::Id"}]}},
+    {"name": "the unit of the declaration selects it, not the unit of the reference", "rule": {"name": "r", "subjects": {"any_of": ["crate::db"]}, "items": {"kinds": ["method"], "must": {"not_use": {"any_of": ["crate::db"]}}}}, "expect": {"violations": [{"unit": "crate::db", "item": "crate::domain::Order::save", "target": "crate::db::Pool"}]}},
+    {"name": "ignored tags apply to the references inside items", "rule": {"name": "r", "subjects": {"all": true}, "items": {"named": ["Handler"], "must": {"not_use": {"any_of": ["crate::db"]}}}, "ignore_tags": ["test"]}, "expect": {"violations": []}},
+    {"name": "the references inside items with tags count without the filter", "rule": {"name": "r", "subjects": {"all": true}, "items": {"named": ["Handler"], "must": {"not_use": {"any_of": ["crate::db"]}}}}, "expect": {"violations": [{"unit": "crate::api", "item": "crate::api::Handler", "target": "crate::db::Pool"}]}},
+    {"name": "every reference inside the items must lead to a target or stay in its unit", "rule": {"name": "r", "subjects": {"all": true}, "items": {"kinds": ["fn"], "must": {"only_use": {"any_of": ["crate::db"]}}}}, "expect": {"violations": [{"unit": "crate::domain", "line": 7, "item": "crate::domain::price", "target": "std::fmt::Display", "kind": "type"}]}},
+    {"name": "the kinds of a rule apply to the references inside items", "rule": {"name": "r", "subjects": {"all": true}, "items": {"must": {"not_use": {"any_of": ["crate::db"]}}}, "kinds": {"only": ["expr"]}}, "expect": {"violations": [{"item": "crate::domain::Order::save", "kind": "expr"}]}},
+    {"name": "an exemption lets a reference inside an item pass", "rule": {"name": "r", "subjects": {"all": true}, "items": {"named": ["Order"], "must": {"not_use": {"any_of": ["crate::db"]}}}, "exemptions": [{"from": ["crate::db"], "to": ["crate::db::Pool"]}]}, "expect": {"violations": [{"item": "crate::domain::Order::id"}]}},
+    {"name": "a target outside the analysed code can be used inside an item", "rule": {"name": "r", "subjects": {"all": true}, "items": {"named": ["price"], "must": {"not_use": {"any_of": ["std::fmt"]}}}}, "expect": {"violations": [{"unit": "crate::domain", "line": 7, "item": "crate::domain::price", "target": "std::fmt::Display"}]}},
+    {"name": "a target inside the analysed code must exist", "rule": {"name": "r", "subjects": {"all": true}, "items": {"must": {"not_use": {"any_of": ["crate::cache"]}}}}, "expect": {"errors": [{"code": "pattern-matches-nothing", "role": "target", "value": "crate::cache"}]}},
+    {"name": "an empty list of targets is an error", "rule": {"name": "r", "subjects": {"all": true}, "items": {"must": {"only_use": {"any_of": []}}}}, "expect": {"errors": [{"code": "empty-list", "role": "target"}]}},
+    {"name": "the reason of a rule is printed with its violations", "rule": {"name": "r", "reason": "what is sent over the wire knows no database", "subjects": {"any_of": ["crate::domain"]}, "items": {"named": ["Order"], "must": {"not_use": {"any_of": ["crate::db::Id"]}}}}, "expect": {"violations": [{"item": "crate::domain::Order::id"}]}}
+  ]
+}

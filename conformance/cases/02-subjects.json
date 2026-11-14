@@ -1,0 +1,97 @@
+{
+  "description": "Subjects: union of patterns, exceptions, and the errors for empty selections.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate", "crate::a", "crate::a::x", "crate::b", "crate::c", "crate::platform", "crate::platform::fs"],
+    "kinds": ["expr"],
+    "facts": [
+      { "unit": "crate", "file": "src/lib.rs", "line": 1, "reference": { "target": "std::fs::read", "kind": "expr" } },
+      { "unit": "crate::a", "file": "src/a.rs", "line": 2, "reference": { "target": "std::fs::read", "kind": "expr" } },
+      { "unit": "crate::a::x", "file": "src/a/x.rs", "line": 3, "reference": { "target": "std::fs::read", "kind": "expr" } },
+      { "unit": "crate::b", "file": "src/b.rs", "line": 4, "reference": { "target": "std::fs::read", "kind": "expr" } },
+      { "unit": "crate::c", "file": "src/c.rs", "line": 5, "reference": { "target": "std::fs::read", "kind": "expr" } },
+      { "unit": "crate::platform", "file": "src/platform/mod.rs", "line": 6, "reference": { "target": "std::fs::read", "kind": "expr" } },
+      { "unit": "crate::platform::fs", "file": "src/platform/fs.rs", "line": 7, "reference": { "target": "std::fs::read", "kind": "expr" } }
+    ]
+  },
+  "cases": [
+    {
+      "name": "several subject patterns form a union",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::a", "crate::b"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [ { "line": 2 }, { "line": 4 } ] }
+    },
+    {
+      "name": "the order of subject patterns does not change the result",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::b", "crate::a"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [ { "line": 2 }, { "line": 4 } ] }
+    },
+    {
+      "name": "a unit that two patterns select is reported once",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::a::**", "crate::a::x"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [ { "line": 2 }, { "line": 3 } ] }
+    },
+    {
+      "name": "a subject without wildcard does not select units below it",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::a"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [ { "unit": "crate::a", "line": 2 } ] }
+    },
+    {
+      "name": "all units",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [ { "line": 1 }, { "line": 2 }, { "line": 3 }, { "line": 4 }, { "line": 5 }, { "line": 6 }, { "line": 7 } ] }
+    },
+    {
+      "name": "all units except one subtree",
+      "rule": { "name": "r", "subjects": { "all": true, "except": ["crate::platform::**"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [ { "line": 1 }, { "line": 2 }, { "line": 3 }, { "line": 4 }, { "line": 5 } ] }
+    },
+    {
+      "name": "several exceptions form a union",
+      "rule": { "name": "r", "subjects": { "all": true, "except": ["crate::platform::**", "crate::c"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [ { "line": 1 }, { "line": 2 }, { "line": 3 }, { "line": 4 } ] }
+    },
+    {
+      "name": "exceptions are subtracted from a pattern list",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::a::**"], "except": ["crate::a::x"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [ { "unit": "crate::a", "line": 2 } ] }
+    },
+    {
+      "name": "error: one of two subject patterns matches nothing",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::a", "crate::zz"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [ { "code": "pattern-matches-nothing", "role": "subject", "value": "crate::zz" } ] }
+    },
+    {
+      "name": "error: each subject pattern that matches nothing is reported, in order",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::zz", "crate::a", "crate::yy::**"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [
+        { "code": "pattern-matches-nothing", "role": "subject", "value": "crate::zz" },
+        { "code": "pattern-matches-nothing", "role": "subject", "value": "crate::yy::**" }
+      ] }
+    },
+    {
+      "name": "error: an exception that matches nothing",
+      "rule": { "name": "r", "subjects": { "all": true, "except": ["crate::platform::**", "crate::gone"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [ { "code": "pattern-matches-nothing", "role": "subject-exception", "value": "crate::gone" } ] }
+    },
+    {
+      "name": "error: the exceptions remove every selected unit",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::a::x"], "except": ["crate::a::**"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [ { "code": "no-subjects" } ] }
+    },
+    {
+      "name": "error: all units except all units",
+      "rule": { "name": "r", "subjects": { "all": true, "except": ["**"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [ { "code": "no-subjects" } ] }
+    },
+    {
+      "name": "error: an empty subject list",
+      "rule": { "name": "r", "subjects": { "any_of": [] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [ { "code": "empty-list", "role": "subject" } ] }
+    },
+    {
+      "name": "error: an empty exception list",
+      "rule": { "name": "r", "subjects": { "all": true, "except": [] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [ { "code": "empty-list", "role": "subject-exception" } ] }
+    }
+  ]
+}

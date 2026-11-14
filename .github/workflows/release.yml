@@ -1,0 +1,153 @@
+# A release: a tag vX.Y.Z, the crates refpact-core and refpact on crates.io, and the package
+# refpact on npm. Run it by hand to release the next version, or push a tag vX.Y.Z whose
+# version the files already have.
+#
+# How each run chooses what to do, and the secrets it needs: "Releases" in
+# docs/development.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Part of the version to increment, when the latest version is released
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: read
+
+# One release at a time, so that two runs do not take the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  PACKAGE: refpact
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the commit and the tag of a run by hand
+    steps:
+      # A run by hand always takes the latest main, also when it is run again from the
+      # Actions tab, so that it sees what an earlier run pushed.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'refs/heads/main' || github.ref }}
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Before the plan, which runs `cargo xtask bump`. The package ships the core as
+      # WebAssembly, which `pnpm test` builds.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          # The tests of `resolve_calls` run rust-analyzer.
+          components: rust-analyzer
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Choose the version
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          BUMP: ${{ inputs.bump }}
+        run: |
+          current="$(cargo xtask bump current)"
+          if [ "$EVENT" = push ]; then
+            test "v$current" = "$TAG" \
+              || { echo "::error::The tag is $TAG, but the files have version $current"; exit 1; }
+            mode=publish version="$current"
+          elif ! git ls-remote --exit-code --tags origin "refs/tags/v$current" > /dev/null; then
+            mode=tag version="$current"
+          else
+            # Exit 0 with the version: published. Exit 0 with nothing (no such version) or
+            # E404 (no such package): not published. Anything else: stop.
+            if found="$(npm view "$PACKAGE@$current" version 2>&1)"; then
+              if [ "$found" = "$current" ]; then published=yes; else published=no; fi
+            elif grep -q E404 <<< "$found"; then
+              published=no
+            else
+              echo "$found"; echo "::error::Cannot tell if $PACKAGE@$current is published"; exit 1
+            fi
+            if [ "$published" = no ]; then
+              mode=resume version="$current"
+              git fetch --depth 1 origin tag "v$current"
+              git checkout --detach "v$current"
+            else
+              mode=bump version="$(cargo xtask bump "$BUMP")"
+            fi
+          fi
+          echo "::notice::$mode v$version"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - run: pnpm install --frozen-lockfile
+
+      # A push with GITHUB_TOKEN does not start CI, so the release is tested here.
+      # --locked also checks that Cargo.lock has the new version.
+      - run: cargo test --workspace --locked
+      - run: pnpm test
+
+      - name: Push the tag, and the commit of a new version
+        if: steps.plan.outputs.mode == 'tag' || steps.plan.outputs.mode == 'bump'
+        env:
+          MODE: ${{ steps.plan.outputs.mode }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$MODE" = bump ]; then
+            git add Cargo.toml Cargo.lock packages/refpact/package.json
+            git commit --message "Release v$VERSION"
+            git tag --annotate "v$VERSION" --message "v$VERSION"
+            git push --atomic origin HEAD:main "v$VERSION"
+          else
+            git tag --annotate "v$VERSION" --message "v$VERSION"
+            git push origin "v$VERSION"
+          fi
+
+      # The crates first, the core before the crate that needs it. npm is last, because the
+      # plan above reads npm to tell if a version is released. A crate that an earlier run
+      # published is skipped.
+      - name: Publish the crates
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          # The root manifest has `publish = false`, so that only this job publishes.
+          sed -i 's/^publish = false$/publish = true/' Cargo.toml
+          for crate in refpact-core refpact; do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --user-agent refpact-release "https://crates.io/api/v1/crates/$crate/$VERSION")"
+            case "$status" in
+              200) echo "::notice::$crate $VERSION is on crates.io already" ;;
+              404) cargo publish --package "$crate" --locked --allow-dirty ;;
+              *) echo "::error::Cannot tell if $crate $VERSION is published (HTTP $status)"; exit 1 ;;
+            esac
+          done
+
+      - name: Publish the TypeScript package
+        working-directory: packages/refpact
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          pnpm build
+          npm pkg delete private
+          # LICENSE is a link to the one at the root, and npm does not follow links.
+          cp --remove-destination ../../LICENSE LICENSE
+          npm publish

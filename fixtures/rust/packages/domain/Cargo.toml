@@ -1,0 +1,12 @@
+[package]
+name = "shop-domain"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+rand_core = { path = "../../stubs/rand_core" }
+
+[dev-dependencies]
+facade = { path = "../../stubs/facade" }
+rand_core = { path = "../../stubs/rand_core" }

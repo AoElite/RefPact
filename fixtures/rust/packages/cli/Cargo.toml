@@ -1,0 +1,13 @@
+[package]
+name = "shop-cli"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+shop-api = { path = "../api" }
+rand_core = { path = "../../stubs/rand_core" }
+
+[target.'cfg(unix)'.dependencies]
+facade = { path = "../../stubs/facade" }
+shop-tools = { path = "../tools" }

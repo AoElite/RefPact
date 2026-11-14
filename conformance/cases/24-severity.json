@@ -1,0 +1,141 @@
+{
+  "description": "`severity`: a warning has the violations of an error. Only the heading of its report differs; a binding does not fail a check on it.",
+  "separator": "::",
+  "facts": {
+    "units": [
+      "crate",
+      "crate::api",
+      "crate::db"
+    ],
+    "items": [
+      "crate::db::query"
+    ],
+    "kinds": [
+      "use"
+    ],
+    "facts": [
+      {
+        "unit": "crate::api",
+        "file": "src/api.rs",
+        "line": 2,
+        "reference": {
+          "target": "crate::db::query",
+          "kind": "use"
+        }
+      },
+      {
+        "unit": "crate::api",
+        "file": "src/api.rs",
+        "line": 7,
+        "reference": {
+          "target": "std::fs::read",
+          "kind": "use"
+        }
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "a warning has the violations of an error",
+      "rule": {
+        "name": "r",
+        "severity": "warning",
+        "subjects": {
+          "any_of": [
+            "crate::api"
+          ]
+        },
+        "must_not_use": {
+          "any_of": [
+            "crate::db"
+          ]
+        }
+      },
+      "expect": {
+        "violations": [
+          {
+            "unit": "crate::api",
+            "file": "src/api.rs",
+            "line": 2,
+            "detail": "uses",
+            "target": "crate::db::query"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a warning gives the reason",
+      "rule": {
+        "name": "r",
+        "severity": "warning",
+        "reason": "the api will move to the services",
+        "subjects": {
+          "any_of": [
+            "crate::api"
+          ]
+        },
+        "must_not_use": {
+          "any_of": [
+            "std::fs"
+          ]
+        }
+      },
+      "expect": {
+        "violations": [
+          {
+            "target": "std::fs::read"
+          }
+        ]
+      }
+    },
+    {
+      "name": "an error is the default",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "any_of": [
+            "crate::api"
+          ]
+        },
+        "must_not_use": {
+          "any_of": [
+            "crate::db"
+          ]
+        }
+      },
+      "expect": {
+        "violations": [
+          {
+            "target": "crate::db::query"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a warning that cannot fail is an error",
+      "rule": {
+        "name": "r",
+        "severity": "warning",
+        "subjects": {
+          "any_of": [
+            "crate::web"
+          ]
+        },
+        "must_not_use": {
+          "any_of": [
+            "crate::db"
+          ]
+        }
+      },
+      "expect": {
+        "errors": [
+          {
+            "code": "pattern-matches-nothing",
+            "role": "subject",
+            "value": "crate::web"
+          }
+        ]
+      }
+    }
+  ]
+}

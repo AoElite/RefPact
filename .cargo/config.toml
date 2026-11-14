@@ -1,0 +1,3 @@
+[alias]
+# The tasks of the repository, in the crate `xtask`: `cargo xtask bump patch`.
+xtask = "run --package xtask --quiet --"

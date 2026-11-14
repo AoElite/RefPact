@@ -1,0 +1,12 @@
+{
+  // The clean fixture: a Node project with ES modules, so imports name `.js` files.
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "nodenext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

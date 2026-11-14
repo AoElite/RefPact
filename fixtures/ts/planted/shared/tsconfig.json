@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "preserve",
+    "strict": true,
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./out",
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "refpact",
+  "entryPoints": [
+    "../refpact/src/index.ts"
+  ],
+  "tsconfig": "../refpact/tsconfig.build.json",
+  "readme": "none",
+  "out": "out",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "disableSources": true,
+  "treatWarningsAsErrors": true,
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": true
+  },
+  "requiredToBeDocumented": [
+    "Enum",
+    "EnumMember",
+    "Variable",
+    "Function",
+    "Class",
+    "Interface",
+    "Property",
+    "Method",
+    "Accessor",
+    "TypeAlias"
+  ],
+  "intentionallyNotDocumented": [
+    "Detail.__type.type",
+    "Failure.__type.type",
+    "core.Constraint.__type.type",
+    "core.Include.__type.type",
+    "core.KindFilter.__type.type",
+    "core.EvaluateResult.__type.ok",
+    "core.ParsedBaseline.__type.ok"
+  ]
+}

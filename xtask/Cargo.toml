@@ -1,0 +1,11 @@
+[package]
+name = "xtask"
+description = "Tasks of the refpact repository, run with `cargo xtask`. Not published."
+version = "0.0.0"
+edition.workspace = true
+# Newer than the libraries (1.80): only this repository and its CI build xtask, on stable.
+rust-version = "1.87"
+publish = false
+
+[dependencies]
+serde_json.workspace = true

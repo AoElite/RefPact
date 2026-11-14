@@ -1,0 +1,34 @@
+{
+  "description": "`must_be_used`: each unit is referred to from outside itself and the units below it.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate", "crate::api", "crate::api::http", "crate::behind", "crate::core", "crate::core::model", "crate::dead", "crate::dead::inner", "crate::island", "crate::island::part", "crate::maybe", "crate::testonly", "crate::typed"],
+    "kinds": ["use", "type"],
+    "tags": ["test"],
+    "facts": [
+      {"unit": "crate", "file": "src/lib.rs", "line": 1, "reference": {"target": "crate::api::http::serve", "kind": "use"}},
+      {"unit": "crate::api::http", "file": "src/api/http.rs", "line": 1, "reference": {"target": "crate::core::model::Order", "kind": "use"}},
+      {"unit": "crate::core::model", "file": "src/core/model.rs", "line": 1, "reference": {"target": "crate::core::helper", "kind": "use"}},
+      {"unit": "crate::dead", "file": "src/dead/mod.rs", "line": 1, "reference": {"target": "crate::dead::inner::x", "kind": "use"}},
+      {"unit": "crate::island", "file": "src/island/mod.rs", "line": 1, "reference": {"target": "crate::island::part::p", "kind": "use"}},
+      {"unit": "crate::island::part", "file": "src/island/part.rs", "line": 1, "reference": {"target": "crate::island::q", "kind": "use"}},
+      {"unit": "crate::core", "file": "src/core/mod.rs", "line": 1, "reference": {"target": "crate::testonly::fixture", "kind": "use"}, "tags": ["test"]},
+      {"unit": "crate::api", "file": "src/api/mod.rs", "line": 1, "reference": {"target": "crate::typed::T", "kind": "type"}},
+      {"unit": "crate::core", "file": "src/core/mod.rs", "line": 2, "reference": {"target": "crate::maybe::m", "kind": "use", "certainty": "candidate"}},
+      {"unit": "crate::api", "file": "src/api/mod.rs", "line": 2, "reference": {"target": "crate::facade::B", "kind": "use", "aliases": ["crate::behind::B"]}},
+      {"unit": "crate::core::model", "file": "src/core/model.rs", "line": 2, "reference": {"target": "crate::api::Config", "kind": "use"}}
+    ]
+  },
+  "cases": [
+    {"name": "a unit that only itself and the units below it use is unused", "rule": {"name": "r", "subjects": {"all": true}, "must_be_used": {}}, "expect": {"violations": [{"unit": "crate", "file": "src/lib.rs", "line": 0, "column": 0, "detail": "unused"}, {"unit": "crate::dead", "file": "src/dead/mod.rs", "line": 0, "column": 0, "detail": "unused"}, {"unit": "crate::island", "file": "src/island/mod.rs", "line": 0, "detail": "unused"}]}},
+    {"name": "the root is left out by an exception", "rule": {"name": "r", "subjects": {"all": true, "except": ["crate"]}, "must_be_used": {}}, "expect": {"violations": [{"unit": "crate::dead", "file": "src/dead/mod.rs", "line": 0, "column": 0, "detail": "unused"}, {"unit": "crate::island", "file": "src/island/mod.rs", "line": 0, "detail": "unused"}]}},
+    {"name": "ignored tags apply to the uses", "rule": {"name": "r", "subjects": {"all": true, "except": ["crate"]}, "must_be_used": {}, "ignore_tags": ["test"]}, "expect": {"violations": [{"unit": "crate::dead", "file": "src/dead/mod.rs", "line": 0, "column": 0, "detail": "unused"}, {"unit": "crate::island", "file": "src/island/mod.rs", "line": 0, "detail": "unused"}, {"unit": "crate::testonly", "file": "", "line": 0, "detail": "unused"}]}},
+    {"name": "the kind filter applies to the uses", "rule": {"name": "r", "subjects": {"all": true, "except": ["crate"]}, "must_be_used": {}, "kinds": {"except": ["type"]}}, "expect": {"violations": [{"unit": "crate::dead", "file": "src/dead/mod.rs", "line": 0, "column": 0, "detail": "unused"}, {"unit": "crate::island", "file": "src/island/mod.rs", "line": 0, "detail": "unused"}, {"unit": "crate::typed", "file": ""}]}},
+    {"name": "candidates can be ignored", "rule": {"name": "r", "subjects": {"all": true, "except": ["crate"]}, "must_be_used": {}, "candidates": "ignore"}, "expect": {"violations": [{"unit": "crate::dead", "file": "src/dead/mod.rs", "line": 0, "column": 0, "detail": "unused"}, {"unit": "crate::island", "file": "src/island/mod.rs", "line": 0, "detail": "unused"}, {"unit": "crate::maybe"}]}},
+    {"name": "the unit that uses does not have to be selected", "rule": {"name": "r", "subjects": {"any_of": ["crate::dead::inner", "crate::behind"]}, "must_be_used": {}}, "expect": {"violations": []}},
+    {"name": "only selected units are reported", "rule": {"name": "r", "subjects": {"any_of": ["crate::dead", "crate::typed"]}, "must_be_used": {}}, "expect": {"violations": [{"unit": "crate::dead", "file": "src/dead/mod.rs", "line": 0, "column": 0, "detail": "unused"}]}},
+    {"name": "the errors of the subjects apply", "rule": {"name": "r", "subjects": {"any_of": ["crate::nothing"]}, "must_be_used": {}}, "expect": {"errors": [{"code": "pattern-matches-nothing", "role": "subject", "value": "crate::nothing"}]}},
+    {"name": "a baseline accepts an unused unit", "rule": {"name": "r", "subjects": {"all": true, "except": ["crate"]}, "must_be_used": {}}, "expect": {"violations": [{"unit": "crate::island", "file": "src/island/mod.rs", "line": 0, "detail": "unused"}]}, "baseline": "r\tcrate::dead\tunused\t1\n"},
+    {"name": "a unit that is used again makes the entry stale", "rule": {"name": "r", "subjects": {"all": true, "except": ["crate"]}, "must_be_used": {}}, "expect": {"violations": [], "stale": [{"unit": "crate::typed", "what": "unused", "count": 1, "found": 0}]}, "baseline": "r\tcrate::dead\tunused\t1\nr\tcrate::typed\tunused\t1\nr\tcrate::island\tunused\t1\n"}
+  ]
+}

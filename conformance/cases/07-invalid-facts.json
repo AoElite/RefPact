@@ -1,0 +1,42 @@
+{
+  "description": "Invalid fact sets: a front end that breaks its own declarations is an error for every rule.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate::a"],
+    "kinds": ["expr"],
+    "markers": ["unsafe-block"],
+    "tags": ["test"],
+    "properties": ["version"],
+    "facts": [
+      { "unit": "crate::a", "file": "src/a.rs", "line": 1, "reference": { "target": "std::fs::read", "kind": "expr" } },
+      { "unit": "crate::b", "file": "src/b.rs", "line": 2, "reference": { "target": "std::fs::read", "kind": "path" } },
+      { "unit": "crate::b", "file": "src/b.rs", "line": 3, "tags": ["bench"], "marker": "unsafe-fn" },
+      { "unit": "crate::a", "file": "src/a.rs", "line": 4, "tags": ["bench", "test"], "marker": "unsafe-block" },
+      { "unit": "crate::a", "file": "src/a.rs", "line": 5, "reference": { "target": "serde", "kind": "expr", "properties": { "version": "1.0.0", "license": "MIT" } } }
+    ]
+  },
+  "cases": [
+    {
+      "name": "error: each undeclared value is reported once, in fact order",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::a"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [
+        { "code": "invalid-facts", "role": "unit", "value": "crate::b" },
+        { "code": "invalid-facts", "role": "kind", "value": "path" },
+        { "code": "invalid-facts", "role": "marker", "value": "unsafe-fn" },
+        { "code": "invalid-facts", "role": "tag", "value": "bench" },
+        { "code": "invalid-facts", "role": "property", "value": "license" }
+      ] }
+    },
+    {
+      "name": "error: an invalid fact set hides the errors of the rule",
+      "rule": { "name": "", "subjects": { "any_of": ["crate::zz"] }, "must_not_contain": [] },
+      "expect": { "errors": [
+        { "code": "invalid-facts", "role": "unit", "value": "crate::b" },
+        { "code": "invalid-facts", "role": "kind", "value": "path" },
+        { "code": "invalid-facts", "role": "marker", "value": "unsafe-fn" },
+        { "code": "invalid-facts", "role": "tag", "value": "bench" },
+        { "code": "invalid-facts", "role": "property", "value": "license" }
+      ] }
+    }
+  ]
+}

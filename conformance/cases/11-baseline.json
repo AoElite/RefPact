@@ -1,0 +1,44 @@
+{
+  "description": "Baselines (SPEC section 7): accepted violations, keys without line numbers, and stale entries.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate", "crate::c", "crate::a", "crate::b"],
+    "items": ["crate::a::Y", "crate::b::X", "crate::c::Z"],
+    "kinds": ["use", "expr"],
+    "markers": ["unsafe-block"],
+    "facts": [
+      {"unit": "crate::c", "file": "crate/c.rs", "line": 1, "reference": {"target": "std::fs", "kind": "use"}},
+      {"unit": "crate::c", "file": "crate/c.rs", "line": 2, "reference": {"target": "crate::a::Y", "kind": "use"}},
+      {"unit": "crate::a", "file": "crate/a.rs", "line": 1, "reference": {"target": "crate::b::X", "kind": "use"}},
+      {"unit": "crate::a", "file": "crate/a.rs", "line": 2, "reference": {"target": "crate::b::X", "kind": "expr"}},
+      {"unit": "crate::a", "file": "crate/a.rs", "line": 3, "reference": {"target": "crate::b::X", "kind": "use"}},
+      {"unit": "crate::a", "file": "crate/a.rs", "line": 4, "marker": "unsafe-block"},
+      {"unit": "crate::a", "file": "crate/a.rs", "line": 5, "reference": {"target": "crate::c::Z", "kind": "use"}},
+      {"unit": "crate::b", "file": "crate/b.rs", "line": 1, "reference": {"target": "crate::a::Y", "kind": "use"}}
+    ]
+  },
+  "cases": [
+    {"name": "without a baseline the violations are reported", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": [{"line": 1}, {"line": 2}, {"line": 3}]}},
+    {"name": "a baseline that accepts all violations leaves none", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": [], "stale": []}, "baseline": "no b\tcrate::a\tuses use crate::b::X\t2\nno b\tcrate::a\tuses expr crate::b::X\t1\n"},
+    {"name": "comments and empty lines are ignored", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": []}, "baseline": "# a comment\n\nno b\tcrate::a\tuses use crate::b::X\t2\n\n# another\nno b\tcrate::a\tuses expr crate::b::X\t1\n"},
+    {"name": "a file without a line break at the end, and with Windows line breaks", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": []}, "baseline": "no b\tcrate::a\tuses use crate::b::X\t2\r\nno b\tcrate::a\tuses expr crate::b::X\t1"},
+    {"name": "more violations than the count: all with that key remain", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": [{"line": 1}, {"line": 3}]}, "baseline": "no b\tcrate::a\tuses use crate::b::X\t1\nno b\tcrate::a\tuses expr crate::b::X\t1\n"},
+    {"name": "a key that is not in the baseline remains", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": [{"line": 2}]}, "baseline": "no b\tcrate::a\tuses use crate::b::X\t2\n"},
+    {"name": "fewer violations than the count: the entry is stale", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": [], "stale": [{"unit": "crate::a", "what": "uses use crate::b::X", "count": 3, "found": 2}]}, "baseline": "no b\tcrate::a\tuses use crate::b::X\t3\nno b\tcrate::a\tuses expr crate::b::X\t1\n"},
+    {"name": "an entry for a violation that is gone is stale", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": [], "stale": [{"unit": "crate::a", "what": "uses use crate::gone", "count": 1, "found": 0}]}, "baseline": "no b\tcrate::a\tuses use crate::gone\t1\nno b\tcrate::a\tuses use crate::b::X\t2\nno b\tcrate::a\tuses expr crate::b::X\t1\n"},
+    {"name": "entries of other rules do not count and are not stale", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": [{"line": 1}, {"line": 2}, {"line": 3}], "stale": []}, "baseline": "another rule\tcrate::a\tuses use crate::b::X\t2\nanother rule\tcrate::a\tuses use crate::gone\t1\n"},
+    {"name": "entries of other units do not count", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": [{"line": 1}, {"line": 3}], "stale": [{"unit": "crate::c", "what": "uses use crate::b::X", "count": 2, "found": 0}]}, "baseline": "no b\tcrate::c\tuses use crate::b::X\t2\nno b\tcrate::a\tuses expr crate::b::X\t1\n"},
+    {"name": "entries with the same key are added", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"violations": []}, "baseline": "no b\tcrate::a\tuses use crate::b::X\t1\nno b\tcrate::a\tuses use crate::b::X\t1\nno b\tcrate::a\tuses expr crate::b::X\t1\n"},
+    {"name": "a marker has the key `contains`", "rule": {"name": "no unsafe", "subjects": {"all": true}, "must_not_contain": ["unsafe-block"]}, "expect": {"violations": []}, "baseline": "no unsafe\tcrate::a\tcontains unsafe-block\t1\n"},
+    {"name": "an allow-list violation has the key `uses`", "rule": {"name": "only std", "subjects": {"any_of": ["crate::b"]}, "must_only_use": {"any_of": ["std"]}}, "expect": {"violations": []}, "baseline": "only std\tcrate::b\tuses use crate::a::Y\t1\n"},
+    {"name": "a cycle has its nodes as key, from the smallest", "rule": {"name": "no cycles", "subjects": {"any_of": ["crate::c", "crate::a"]}, "must_be_acyclic": {}}, "expect": {"violations": [], "stale": []}, "baseline": "no cycles\tcrate::a\tcycle crate::a > crate::c\t1\n"},
+    {"name": "a cycle that is written from another node is another key", "rule": {"name": "no cycles", "subjects": {"any_of": ["crate::c", "crate::a"]}, "must_be_acyclic": {}}, "expect": {"violations": [{"unit": "crate::c"}], "stale": [{"unit": "crate::c", "what": "cycle crate::c > crate::a", "count": 1, "found": 0}]}, "baseline": "no cycles\tcrate::c\tcycle crate::c > crate::a\t1\n"},
+    {"name": "a rule with errors gives the same errors with a baseline", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::nope"]}}, "expect": {"errors": [{"code": "pattern-matches-nothing", "role": "target", "value": "crate::nope"}]}, "baseline": "no b\tcrate::a\tuses use crate::b::X\t2\n"},
+    {"name": "a line with three values is invalid", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"baseline_error": 2}, "baseline": "no b\tcrate::a\tuses use crate::b::X\t2\nno b\tcrate::a\tuses expr crate::b::X\n"},
+    {"name": "a line with five values is invalid", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"baseline_error": 1}, "baseline": "no b\tcrate::a\tuses expr crate::b::X\t1\t1\n"},
+    {"name": "a count of zero is invalid", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"baseline_error": 1}, "baseline": "no b\tcrate::a\tuses use crate::b::X\t0\n"},
+    {"name": "a count that is not in digits is invalid", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"baseline_error": 3}, "baseline": "# header\n\nno b\tcrate::a\tuses use crate::b::X\t+2\n"},
+    {"name": "an empty value is invalid", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"baseline_error": 1}, "baseline": "no b\t\tuses use crate::b::X\t1\n"},
+    {"name": "a line of spaces is invalid", "rule": {"name": "no b", "subjects": {"any_of": ["crate::a"]}, "must_not_use": {"any_of": ["crate::b"]}}, "expect": {"baseline_error": 2}, "baseline": "no b\tcrate::a\tuses use crate::b::X\t2\n  \n"}
+  ]
+}

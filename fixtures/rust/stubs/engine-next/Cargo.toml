@@ -1,0 +1,7 @@
+# A later version of `engine`, so that a build can need two versions of one package.
+[package]
+name = "engine"
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+publish = false

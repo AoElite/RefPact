@@ -1,0 +1,49 @@
+{
+  "description": "`must_only_be_used_by`: only the users, and the protected units themselves, refer to the protected units.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate", "crate::api", "crate::db", "crate::db::pool", "crate::facade", "crate::jobs", "crate::util"],
+    "kinds": ["use", "type"],
+    "tags": ["test"],
+    "facts": [
+      {"unit": "crate::api", "file": "src/api.rs", "line": 1, "reference": {"target": "crate::db::query", "kind": "use"}},
+      {"unit": "crate::jobs", "file": "src/jobs.rs", "line": 1, "reference": {"target": "crate::db::pool::Pool", "kind": "type"}},
+      {"unit": "crate::facade", "file": "src/facade.rs", "line": 1, "reference": {"target": "crate::db::query", "kind": "use"}},
+      {"unit": "crate::util", "file": "src/util.rs", "line": 1, "reference": {"target": "crate::facade::query", "aliases": ["crate::db::query"], "kind": "use"}},
+      {"unit": "crate::db", "file": "src/db/mod.rs", "line": 1, "reference": {"target": "crate::util::retry", "kind": "use"}},
+      {"unit": "crate::jobs", "file": "src/jobs.rs", "line": 2, "reference": {"target": "crate::db::query", "kind": "use"}, "tags": ["test"]},
+      {"unit": "crate::util", "file": "src/util.rs", "line": 2, "reference": {"target": "crate::db::maybe", "kind": "use", "certainty": "candidate"}},
+      {"unit": "crate::db::pool", "file": "src/db/pool.rs", "line": 1, "reference": {"target": "crate::db::query", "kind": "use"}}
+    ]
+  },
+  "cases": [
+    {"name": "a unit that is neither a user nor protected must not refer to a protected unit", "rule": {"name": "r", "subjects": {"any_of": ["crate::db::**"]}, "must_only_be_used_by": {"users": ["crate::api"]}}, "expect": {"violations": [
+      {"unit": "crate::jobs", "file": "src/jobs.rs", "line": 1, "target": "crate::db::pool::Pool", "written": null, "kind": "type", "detail": "uses"},
+      {"unit": "crate::facade", "line": 1, "target": "crate::db::query", "written": null},
+      {"unit": "crate::util", "line": 1, "target": "crate::db::query", "written": "crate::facade::query"},
+      {"unit": "crate::jobs", "line": 2, "target": "crate::db::query"},
+      {"unit": "crate::util", "line": 2, "target": "crate::db::maybe", "certainty": "candidate"}
+    ]}},
+    {"name": "a barrel that is a user does not make its own users users", "rule": {"name": "r", "subjects": {"any_of": ["crate::db::**"]}, "must_only_be_used_by": {"users": ["crate::api", "crate::facade"]}}, "expect": {"violations": [
+      {"unit": "crate::jobs", "line": 1},
+      {"unit": "crate::util", "line": 1, "target": "crate::db::query", "written": "crate::facade::query"},
+      {"unit": "crate::jobs", "line": 2},
+      {"unit": "crate::util", "line": 2}
+    ]}},
+    {"name": "a unit below a protected unit is protected only when it is selected", "rule": {"name": "r", "subjects": {"any_of": ["crate::db"]}, "must_only_be_used_by": {"users": ["crate::api"]}}, "expect": {"violations": [
+      {"unit": "crate::facade", "line": 1},
+      {"unit": "crate::util", "line": 1},
+      {"unit": "crate::jobs", "line": 2},
+      {"unit": "crate::util", "line": 2},
+      {"unit": "crate::db::pool", "line": 1, "target": "crate::db::query"}
+    ]}},
+    {"name": "the filters apply", "rule": {"name": "r", "subjects": {"any_of": ["crate::db::**"]}, "must_only_be_used_by": {"users": ["crate::api"]}, "kinds": {"only": ["use"]}, "ignore_tags": ["test"], "candidates": "ignore"}, "expect": {"violations": [
+      {"unit": "crate::facade", "line": 1},
+      {"unit": "crate::util", "line": 1}
+    ]}},
+    {"name": "a baseline accepts a use", "rule": {"name": "r", "subjects": {"any_of": ["crate::db::**"]}, "must_only_be_used_by": {"users": ["crate::api", "crate::facade", "crate::util"]}}, "baseline": "r\tcrate::jobs\tuses type crate::db::pool::Pool\t1\nr\tcrate::jobs\tuses use crate::db::query\t1\n", "expect": {"violations": []}},
+    {"name": "no users is an error", "rule": {"name": "r", "subjects": {"any_of": ["crate::db::**"]}, "must_only_be_used_by": {"users": []}}, "expect": {"errors": [{"code": "empty-list", "role": "user"}]}},
+    {"name": "a user that matches no unit is an error", "rule": {"name": "r", "subjects": {"any_of": ["crate::db::**"]}, "must_only_be_used_by": {"users": ["crate::api", "crate::nothing"]}}, "expect": {"errors": [{"code": "pattern-matches-nothing", "role": "user", "value": "crate::nothing"}]}},
+    {"name": "an invalid user is an error", "rule": {"name": "r", "subjects": {"any_of": ["crate::db::**"]}, "must_only_be_used_by": {"users": [["a**"]]}}, "expect": {"errors": [{"code": "invalid-pattern", "role": "user", "value": "a**"}]}}
+  ]
+}

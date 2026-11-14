@@ -1,0 +1,13 @@
+[package]
+name = "shop-app"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "shop"
+path = "src/app.rs"
+
+[dependencies]
+shop-domain = { path = "../domain" }
+shop-storage = { path = "../storage" }

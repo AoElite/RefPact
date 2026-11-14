@@ -1,0 +1,42 @@
+{
+  "description": "`must_be_acyclic`: cycles between units, and between slices of units.",
+  "separator": "/",
+  "facts": {
+    "units": ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts", "features/x/one.ts", "features/x/two.ts", "features/y/one.ts", "features/z/one.ts", "shared/util.ts"],
+    "kinds": ["import", "import-type"],
+    "tags": ["test"],
+    "facts": [
+      {"unit": "a.ts", "file": "a.ts", "line": 1, "reference": {"target": "b.ts/#f", "kind": "import"}},
+      {"unit": "a.ts", "file": "a.ts", "line": 2, "reference": {"target": "c.ts/#g", "kind": "import"}},
+      {"unit": "b.ts", "file": "b.ts", "line": 1, "reference": {"target": "c.ts/#g", "kind": "import"}},
+      {"unit": "c.ts", "file": "c.ts", "line": 1, "reference": {"target": "a.ts/#h", "kind": "import"}},
+      {"unit": "c.ts", "file": "c.ts", "line": 2, "reference": {"target": "d.ts/#T", "kind": "import-type"}},
+      {"unit": "d.ts", "file": "d.ts", "line": 1, "reference": {"target": "c.ts/#g", "kind": "import"}},
+      {"unit": "e.ts", "file": "e.ts", "line": 1, "reference": {"target": "a.ts/#h", "kind": "import"}},
+      {"unit": "features/x/one.ts", "file": "features/x/one.ts", "line": 1, "reference": {"target": "features/x/two.ts/#p", "kind": "import"}},
+      {"unit": "features/x/two.ts", "file": "features/x/two.ts", "line": 1, "reference": {"target": "features/y/one.ts/#q", "kind": "import"}},
+      {"unit": "features/x/two.ts", "file": "features/x/two.ts", "line": 2, "reference": {"target": "shared/util.ts/#u", "kind": "import"}},
+      {"unit": "features/y/one.ts", "file": "features/y/one.ts", "line": 1, "reference": {"target": "features/x/one.ts/#r", "kind": "import"}, "tags": ["test"]},
+      {"unit": "features/y/one.ts", "file": "features/y/one.ts", "line": 2, "reference": {"target": ["npm:lib"], "kind": "import", "aliases": ["features/z/one.ts/#s"]}},
+      {"unit": "features/z/one.ts", "file": "features/z/one.ts", "line": 1, "reference": {"target": "features/y/one.ts/#q", "kind": "import", "certainty": "candidate"}},
+      {"unit": "shared/util.ts", "file": "shared/util.ts", "line": 1, "reference": {"target": "features/x/one.ts/#r", "kind": "import"}}
+    ]
+  },
+  "cases": [
+    {"name": "a tangle gives one violation with a shortest cycle through its first unit", "rule": {"name": "r", "subjects": {"any_of": ["*.ts"]}, "must_be_acyclic": {}}, "expect": {"violations": [{"unit": "a.ts", "file": "a.ts", "line": 2, "size": 4, "cycle": [{"from": "a.ts", "to": "c.ts", "file": "a.ts", "line": 2, "target": "c.ts/#g", "kind": "import"}, {"from": "c.ts", "to": "a.ts", "file": "c.ts", "line": 1, "target": "a.ts/#h"}]}]}},
+    {"name": "a kind that is left out gives no edge", "rule": {"name": "r", "subjects": {"any_of": ["*.ts"]}, "must_be_acyclic": {}, "kinds": {"except": ["import-type"]}}, "expect": {"violations": [{"unit": "a.ts", "size": 3, "cycle": [{"from": "a.ts", "to": "c.ts", "file": "a.ts", "line": 2, "target": "c.ts/#g", "kind": "import"}, {"from": "c.ts", "to": "a.ts", "file": "c.ts", "line": 1, "target": "a.ts/#h"}]}]}},
+    {"name": "a unit that is not selected is not in the graph", "rule": {"name": "r", "subjects": {"any_of": ["a.ts", "b.ts", "d.ts", "e.ts"]}, "must_be_acyclic": {}}, "expect": {"violations": []}},
+    {"name": "each tangle gives a violation, in the order of the units", "rule": {"name": "r", "subjects": {"all": true}, "must_be_acyclic": {}}, "expect": {"violations": [{"unit": "a.ts", "size": 4}, {"unit": "features/x/one.ts", "file": "features/x/one.ts", "line": 1, "size": 5, "cycle": [{"from": "features/x/one.ts", "to": "features/x/two.ts"}, {"from": "features/x/two.ts", "to": "features/y/one.ts", "line": 1}, {"from": "features/y/one.ts", "to": "features/x/one.ts", "line": 1}]}]}},
+    {"name": "slices are the nodes, and references inside a slice give no edge", "rule": {"name": "r", "subjects": {"any_of": ["features/**"]}, "must_be_acyclic": {"slices": ["features/*"]}}, "expect": {"violations": [{"unit": "features/x", "file": "features/x/two.ts", "line": 1, "size": 3, "cycle": [{"from": "features/x", "to": "features/y", "file": "features/x/two.ts", "line": 1, "target": "features/y/one.ts/#q"}, {"from": "features/y", "to": "features/x", "file": "features/y/one.ts", "line": 1}]}]}},
+    {"name": "a tag that is ignored gives no edge, and an alias with an owner gives one", "rule": {"name": "r", "subjects": {"any_of": ["features/**"]}, "must_be_acyclic": {"slices": ["features/*"]}, "ignore_tags": ["test"]}, "expect": {"violations": [{"unit": "features/y", "file": "features/y/one.ts", "line": 2, "size": 2, "cycle": [{"from": "features/y", "to": "features/z", "target": "features/z/one.ts/#s"}, {"from": "features/z", "to": "features/y", "file": "features/z/one.ts", "line": 1}]}]}},
+    {"name": "candidates can be left out", "rule": {"name": "r", "subjects": {"any_of": ["features/**"]}, "must_be_acyclic": {"slices": ["features/*"]}, "ignore_tags": ["test"], "candidates": "ignore"}, "expect": {"violations": []}},
+    {"name": "several slice patterns form a union, and units without a slice are not nodes", "rule": {"name": "r", "subjects": {"all": true}, "must_be_acyclic": {"slices": ["features/*", "shared"]}}, "expect": {"violations": [{"unit": "features/x", "size": 4, "cycle": [{"from": "features/x", "to": "features/y", "file": "features/x/two.ts", "line": 1, "target": "features/y/one.ts/#q"}, {"from": "features/y", "to": "features/x", "file": "features/y/one.ts", "line": 1}]}]}},
+    {"name": "a slice is the shortest prefix that matches", "rule": {"name": "r", "subjects": {"any_of": ["features/**"]}, "must_be_acyclic": {"slices": ["features/**"]}}, "expect": {"errors": [{"code": "too-few-nodes"}]}},
+    {"name": "one unit cannot form a cycle", "rule": {"name": "r", "subjects": {"any_of": ["a.ts"]}, "must_be_acyclic": {}}, "expect": {"errors": [{"code": "too-few-nodes"}]}},
+    {"name": "selected units without a slice give no node", "rule": {"name": "r", "subjects": {"any_of": ["*.ts"]}, "must_be_acyclic": {"slices": ["features/*"]}}, "expect": {"errors": [{"code": "too-few-nodes"}]}},
+    {"name": "an empty slice list is an error", "rule": {"name": "r", "subjects": {"any_of": ["features/**"]}, "must_be_acyclic": {"slices": []}}, "expect": {"errors": [{"code": "empty-list", "role": "slice"}]}},
+    {"name": "a slice pattern that matches nothing is an error, also beside one that matches", "rule": {"name": "r", "subjects": {"any_of": ["features/**"]}, "must_be_acyclic": {"slices": ["features/*", "nothing/*"]}}, "expect": {"errors": [{"code": "pattern-matches-nothing", "role": "slice", "value": "nothing/*"}]}},
+    {"name": "an invalid slice pattern is an error", "rule": {"name": "r", "subjects": {"any_of": ["features/**"]}, "must_be_acyclic": {"slices": [["a**"]]}}, "expect": {"errors": [{"code": "invalid-pattern", "role": "slice", "value": "a**"}]}},
+    {"name": "the filters are checked after the nodes", "rule": {"name": "r", "subjects": {"any_of": ["a.ts"]}, "must_be_acyclic": {}, "kinds": {"only": ["nope"]}}, "expect": {"errors": [{"code": "too-few-nodes"}, {"code": "unknown-kind", "role": "kind", "value": "nope"}]}}
+  ]
+}

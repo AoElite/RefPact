@@ -1,0 +1,4 @@
+packages:
+  - packages/*
+  - fixtures/ts/*
+  - fixtures/ts/packages/*

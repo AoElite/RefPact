@@ -1,0 +1,40 @@
+{
+  "description": "`must_not_reach`: no chain of references leads to a target.",
+  "separator": "/",
+  "facts": {
+    "units": ["ui/page.ts", "ui/widget.ts", "app/service.ts", "app/repo.ts", "db/client.ts", "db/index.ts", "util/log.ts", "loop/a.ts", "loop/b.ts"],
+    "kinds": ["import", "import-type"],
+    "tags": ["test"],
+    "facts": [
+      {"unit": "ui/page.ts", "file": "ui/page.ts", "line": 1, "reference": {"target": "app/service.ts/#run", "kind": "import"}},
+      {"unit": "ui/page.ts", "file": "ui/page.ts", "line": 2, "reference": {"target": "ui/widget.ts/#W", "kind": "import"}},
+      {"unit": "ui/widget.ts", "file": "ui/widget.ts", "line": 1, "reference": {"target": "util/log.ts/#log", "kind": "import"}},
+      {"unit": "app/service.ts", "file": "app/service.ts", "line": 1, "reference": {"target": "util/log.ts/#log", "kind": "import"}},
+      {"unit": "app/service.ts", "file": "app/service.ts", "line": 2, "reference": {"target": "app/repo.ts/#find", "kind": "import"}},
+      {"unit": "app/repo.ts", "file": "app/repo.ts", "line": 1, "reference": {"target": "db/index.ts/#query", "kind": "import", "aliases": ["db/client.ts/#query"]}},
+      {"unit": "app/repo.ts", "file": "app/repo.ts", "line": 2, "reference": {"target": ["npm:pg"], "kind": "import-type"}},
+      {"unit": "db/index.ts", "file": "db/index.ts", "line": 1, "reference": {"target": "db/client.ts/#query", "kind": "import"}},
+      {"unit": "db/client.ts", "file": "db/client.ts", "line": 1, "reference": {"target": ["npm:pg", "#Pool"], "kind": "import"}},
+      {"unit": "util/log.ts", "file": "util/log.ts", "line": 1, "reference": {"target": ["node:fs"], "kind": "import"}, "tags": ["test"]},
+      {"unit": "loop/a.ts", "file": "loop/a.ts", "line": 1, "reference": {"target": "loop/b.ts/#b", "kind": "import"}},
+      {"unit": "loop/b.ts", "file": "loop/b.ts", "line": 1, "reference": {"target": "loop/a.ts/#a", "kind": "import"}},
+      {"unit": "ui/widget.ts", "file": "ui/widget.ts", "line": 2, "reference": {"target": "db/client.ts/#Row", "kind": "import-type"}},
+      {"unit": "db/client.ts", "file": "db/client.ts", "line": 2, "reference": {"target": ["npm:pg", "#Client"], "kind": "import"}}
+    ]
+  },
+  "cases": [
+    {"name": "the nearest unit that uses the target ends the chain", "rule": {"name": "r", "subjects": {"any_of": ["ui/**"]}, "must_not_reach": {"any_of": [["npm:pg"]]}}, "expect": {"violations": [{"unit": "ui/page.ts", "file": "ui/page.ts", "line": 1, "detail": "reaches", "chain": [{"from": "ui/page.ts", "to": "app/service.ts", "file": "ui/page.ts", "line": 1, "target": "app/service.ts/#run", "kind": "import"}, {"from": "app/service.ts", "to": "app/repo.ts", "file": "app/service.ts", "line": 2, "target": "app/repo.ts/#find"}], "end": {"unit": "app/repo.ts", "file": "app/repo.ts", "line": 2, "column": 1, "target": ["npm:pg"], "kind": "import-type"}}, {"unit": "ui/widget.ts", "file": "ui/widget.ts", "line": 2, "chain": [{"from": "ui/widget.ts", "to": "db/client.ts", "line": 2, "target": "db/client.ts/#Row", "kind": "import-type"}], "end": {"unit": "db/client.ts", "line": 1, "target": ["npm:pg", "#Pool"], "kind": "import"}}]}},
+    {"name": "the kind filter applies to the chain and to its end", "rule": {"name": "r", "subjects": {"any_of": ["ui/**"]}, "must_not_reach": {"any_of": [["npm:pg"]]}, "kinds": {"except": ["import-type"]}}, "expect": {"violations": [{"unit": "ui/page.ts", "line": 1, "chain": [{"from": "ui/page.ts", "to": "app/service.ts"}, {"from": "app/service.ts", "to": "app/repo.ts"}, {"from": "app/repo.ts", "to": "db/index.ts", "line": 1, "target": "db/index.ts/#query"}, {"from": "db/index.ts", "to": "db/client.ts", "line": 1}], "end": {"unit": "db/client.ts", "line": 1, "target": ["npm:pg", "#Pool"]}}]}},
+    {"name": "a unit that uses the target itself has an empty chain", "rule": {"name": "r", "subjects": {"any_of": ["db/client.ts"]}, "must_not_reach": {"any_of": [["npm:pg"]]}}, "expect": {"violations": [{"unit": "db/client.ts", "file": "db/client.ts", "line": 1, "chain": [], "end": {"unit": "db/client.ts", "line": 1, "target": ["npm:pg", "#Pool"]}}]}},
+    {"name": "a target inside the project, also behind an alias", "rule": {"name": "r", "subjects": {"any_of": ["ui/**", "app/repo.ts"]}, "must_not_reach": {"any_of": ["db/client.ts"]}}, "expect": {"violations": [{"unit": "ui/page.ts", "line": 2, "chain": [{"from": "ui/page.ts", "to": "ui/widget.ts", "line": 2}], "end": {"unit": "ui/widget.ts", "line": 2, "target": "db/client.ts/#Row"}}, {"unit": "ui/widget.ts", "line": 2, "chain": [], "end": {"unit": "ui/widget.ts", "line": 2, "target": "db/client.ts/#Row"}}, {"unit": "app/repo.ts", "line": 1, "chain": [], "end": {"unit": "app/repo.ts", "line": 1, "target": "db/client.ts/#query", "kind": "import"}}]}},
+    {"name": "a unit may use itself at the end of a chain", "rule": {"name": "r", "subjects": {"any_of": ["db/client.ts", "db/index.ts"]}, "must_not_reach": {"any_of": ["db/client.ts"]}}, "expect": {"violations": [{"unit": "db/index.ts", "line": 1, "chain": []}]}},
+    {"name": "only the selected units are reported", "rule": {"name": "r", "subjects": {"any_of": ["app/**"]}, "must_not_reach": {"any_of": [["node:fs"]]}}, "expect": {"violations": [{"unit": "app/service.ts", "line": 1, "chain": [{"from": "app/service.ts", "to": "util/log.ts", "line": 1}], "end": {"unit": "util/log.ts", "target": ["node:fs"]}}]}},
+    {"name": "ignored tags apply", "rule": {"name": "r", "subjects": {"any_of": ["app/**"]}, "must_not_reach": {"any_of": [["node:fs"]]}, "ignore_tags": ["test"]}, "expect": {"violations": []}},
+    {"name": "a cycle ends the search", "rule": {"name": "r", "subjects": {"any_of": ["loop/**"]}, "must_not_reach": {"any_of": [["npm:pg"]]}}, "expect": {"violations": []}},
+    {"name": "no target is an error", "rule": {"name": "r", "subjects": {"any_of": ["ui/**"]}, "must_not_reach": {}}, "expect": {"errors": [{"code": "empty-list", "role": "target"}]}},
+    {"name": "a target inside the project must exist", "rule": {"name": "r", "subjects": {"any_of": ["ui/**"]}, "must_not_reach": {"any_of": ["db/nothing.ts"]}}, "expect": {"errors": [{"code": "pattern-matches-nothing", "role": "target", "value": "db/nothing.ts"}]}},
+    {"name": "an unverified target is not checked", "rule": {"name": "r", "subjects": {"any_of": ["ui/**"]}, "must_not_reach": {"unverified": ["db/nothing.ts"]}}, "expect": {"violations": []}},
+    {"name": "a baseline accepts a chain by its start and its target", "rule": {"name": "r", "subjects": {"any_of": ["ui/**"]}, "must_not_reach": {"any_of": [["npm:pg"]]}}, "expect": {"violations": [{"unit": "ui/widget.ts", "file": "ui/widget.ts", "line": 2, "chain": [{"from": "ui/widget.ts", "to": "db/client.ts", "line": 2, "target": "db/client.ts/#Row", "kind": "import-type"}], "end": {"unit": "db/client.ts", "line": 1, "target": ["npm:pg", "#Pool"], "kind": "import"}}]}, "baseline": "r\tui/page.ts\treaches npm:pg\t1\n"},
+    {"name": "an entry for a chain that is gone is stale", "rule": {"name": "r", "subjects": {"any_of": ["ui/**"]}, "must_not_reach": {"any_of": [["npm:pg"]]}}, "expect": {"violations": [{"unit": "ui/page.ts", "file": "ui/page.ts", "line": 1, "detail": "reaches", "chain": [{"from": "ui/page.ts", "to": "app/service.ts", "file": "ui/page.ts", "line": 1, "target": "app/service.ts/#run", "kind": "import"}, {"from": "app/service.ts", "to": "app/repo.ts", "file": "app/service.ts", "line": 2, "target": "app/repo.ts/#find"}], "end": {"unit": "app/repo.ts", "file": "app/repo.ts", "line": 2, "column": 1, "target": ["npm:pg"], "kind": "import-type"}}], "stale": [{"unit": "loop/a.ts", "what": "reaches npm:pg", "count": 1, "found": 0}]}, "baseline": "r\tloop/a.ts\treaches npm:pg\t1\nr\tui/widget.ts\treaches npm:pg/#Pool\t1\n"}
+  ]
+}

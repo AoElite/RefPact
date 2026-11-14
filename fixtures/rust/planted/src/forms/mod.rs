@@ -1,0 +1,31 @@
+//! One module for each form in which code can refer to a path.
+
+pub mod attributes;
+pub mod cfg_branches;
+pub mod expr_full_path;
+pub mod extern_crate;
+pub mod glob_candidates;
+pub mod impl_trait;
+pub mod local_names;
+pub mod macro_path;
+pub mod macro_tokens;
+pub mod macros_parsed;
+pub mod pattern_positions;
+pub mod qualified_path;
+pub mod reexports;
+pub mod test_code;
+pub mod trait_bounds;
+pub mod type_positions;
+pub mod unsafe_code;
+pub mod use_crate;
+pub mod use_glob;
+pub mod use_group;
+pub mod use_in_block;
+pub mod use_leading_colon;
+pub mod use_nested_group;
+pub mod use_rename;
+pub mod use_self;
+pub mod use_simple;
+pub mod use_super;
+pub mod use_then_local;
+pub mod use_then_name;

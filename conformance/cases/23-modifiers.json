@@ -1,0 +1,364 @@
+{
+  "description": "Modifiers: what a declaration says of its item besides its kind and its visibility, selected by `modifiers` and demanded by `have_modifier`.",
+  "separator": "::",
+  "facts": {
+    "units": [
+      "crate",
+      "crate::api",
+      "crate::db"
+    ],
+    "items": [
+      "crate::api::serve",
+      "crate::api::Handler",
+      "crate::api::helper",
+      "crate::db::POOL",
+      "crate::db::connect",
+      "crate::db::test_connect"
+    ],
+    "kinds": [
+      "use"
+    ],
+    "tags": [
+      "test"
+    ],
+    "item_kinds": [
+      "fn",
+      "struct",
+      "static"
+    ],
+    "visibilities": [
+      "pub",
+      "private"
+    ],
+    "relations": [],
+    "modifiers": [
+      "async",
+      "unsafe",
+      "mut",
+      "documented"
+    ],
+    "facts": [],
+    "declarations": [
+      {
+        "path": "crate::api::serve",
+        "name": "serve",
+        "unit": "crate::api",
+        "file": "src/api.rs",
+        "line": 1,
+        "kind": "fn",
+        "visibility": "pub",
+        "modifiers": [
+          "async",
+          "documented"
+        ]
+      },
+      {
+        "path": "crate::api::Handler",
+        "name": "Handler",
+        "unit": "crate::api",
+        "file": "src/api.rs",
+        "line": 4,
+        "kind": "struct",
+        "visibility": "pub",
+        "modifiers": [
+          "documented"
+        ]
+      },
+      {
+        "path": "crate::api::helper",
+        "name": "helper",
+        "unit": "crate::api",
+        "file": "src/api.rs",
+        "line": 8,
+        "kind": "fn",
+        "visibility": "pub"
+      },
+      {
+        "path": "crate::db::POOL",
+        "name": "POOL",
+        "unit": "crate::db",
+        "file": "src/db.rs",
+        "line": 1,
+        "kind": "static",
+        "visibility": "private",
+        "modifiers": [
+          "mut"
+        ]
+      },
+      {
+        "path": "crate::db::connect",
+        "name": "connect",
+        "unit": "crate::db",
+        "file": "src/db.rs",
+        "line": 3,
+        "kind": "fn",
+        "visibility": "pub",
+        "modifiers": [
+          "async",
+          "unsafe"
+        ]
+      },
+      {
+        "path": "crate::db::test_connect",
+        "name": "test_connect",
+        "unit": "crate::db",
+        "file": "src/db.rs",
+        "line": 9,
+        "kind": "fn",
+        "visibility": "pub",
+        "modifiers": [
+          "async"
+        ],
+        "tags": [
+          "test"
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "a modifier selects the items that have it",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "all": true
+        },
+        "items": {
+          "modifiers": [
+            "async"
+          ],
+          "must": "not_exist"
+        }
+      },
+      "expect": {
+        "violations": [
+          {
+            "item": "crate::api::serve",
+            "unit": "crate::api",
+            "file": "src/api.rs",
+            "line": 1,
+            "detail": "item",
+            "item_kind": "fn"
+          },
+          {
+            "item": "crate::db::connect"
+          },
+          {
+            "item": "crate::db::test_connect"
+          }
+        ]
+      }
+    },
+    {
+      "name": "the modifiers of the filter form a union",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "all": true
+        },
+        "items": {
+          "modifiers": [
+            "unsafe",
+            "mut"
+          ],
+          "must": "not_exist"
+        }
+      },
+      "expect": {
+        "violations": [
+          {
+            "item": "crate::db::POOL"
+          },
+          {
+            "item": "crate::db::connect"
+          }
+        ]
+      }
+    },
+    {
+      "name": "the modifier filter narrows the other filters",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "any_of": [
+            "crate::db"
+          ]
+        },
+        "ignore_tags": [
+          "test"
+        ],
+        "items": {
+          "kinds": [
+            "fn"
+          ],
+          "modifiers": [
+            "async"
+          ],
+          "must": "not_exist"
+        }
+      },
+      "expect": {
+        "violations": [
+          {
+            "item": "crate::db::connect"
+          }
+        ]
+      }
+    },
+    {
+      "name": "each selected item must have one of the modifiers",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "all": true
+        },
+        "items": {
+          "visibilities": [
+            "pub"
+          ],
+          "must": {
+            "have_modifier": [
+              "documented"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "violations": [
+          {
+            "item": "crate::api::helper",
+            "unit": "crate::api",
+            "file": "src/api.rs",
+            "line": 8,
+            "detail": "item",
+            "item_kind": "fn"
+          },
+          {
+            "item": "crate::db::connect"
+          },
+          {
+            "item": "crate::db::test_connect"
+          }
+        ]
+      }
+    },
+    {
+      "name": "have_modifier takes any of its modifiers",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "all": true
+        },
+        "items": {
+          "kinds": [
+            "fn"
+          ],
+          "must": {
+            "have_modifier": [
+              "documented",
+              "unsafe"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "violations": [
+          {
+            "item": "crate::api::helper"
+          },
+          {
+            "item": "crate::db::test_connect"
+          }
+        ]
+      }
+    },
+    {
+      "name": "an item without modifiers does not match the filter",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "any_of": [
+            "crate::api"
+          ]
+        },
+        "items": {
+          "modifiers": [
+            "documented"
+          ],
+          "must": {
+            "have_modifier": [
+              "async"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "violations": [
+          {
+            "item": "crate::api::Handler"
+          }
+        ]
+      }
+    },
+    {
+      "name": "an empty list of modifiers is an error",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "all": true
+        },
+        "items": {
+          "modifiers": [],
+          "must": {
+            "have_modifier": []
+          }
+        }
+      },
+      "expect": {
+        "errors": [
+          {
+            "code": "empty-list",
+            "role": "modifier"
+          },
+          {
+            "code": "empty-list",
+            "role": "required-modifier"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a modifier that the front end does not produce is an error",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "all": true
+        },
+        "items": {
+          "modifiers": [
+            "asycn"
+          ],
+          "must": {
+            "have_modifier": [
+              "const"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "errors": [
+          {
+            "code": "unknown-modifier",
+            "role": "modifier",
+            "value": "asycn"
+          },
+          {
+            "code": "unknown-modifier",
+            "role": "required-modifier",
+            "value": "const"
+          }
+        ]
+      }
+    }
+  ]
+}

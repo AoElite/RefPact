@@ -1,0 +1,18 @@
+{
+  // The planted fixture. `module: preserve` allows `import` and `require` forms side by side
+  // and resolves like a bundler: package `exports`, package `imports`, and `paths`.
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "preserve",
+    "strict": true,
+    "noEmit": true,
+    "allowJs": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "paths": {
+      "@db/*": ["./src/db/*"],
+    },
+  },
+  "include": ["src"],
+  "references": [{ "path": "./shared" }],
+}

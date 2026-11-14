@@ -1,0 +1,68 @@
+{
+  "description": "Markers: things a unit contains, such as unsafe code.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate::codec", "crate::ffi"],
+    "kinds": ["expr"],
+    "markers": ["unsafe-fn", "unsafe-block", "unsafe-impl"],
+    "tags": ["test"],
+    "facts": [
+      { "unit": "crate::codec", "file": "src/codec.rs", "line": 7, "column": 5, "marker": "unsafe-block" },
+      { "unit": "crate::codec", "file": "src/codec.rs", "line": 12, "marker": "unsafe-fn" },
+      { "unit": "crate::ffi", "file": "src/ffi.rs", "line": 3, "marker": "unsafe-block" },
+      { "unit": "crate::codec", "file": "src/codec.rs", "line": 20, "tags": ["test"], "marker": "unsafe-block" },
+      { "unit": "crate::codec", "file": "src/codec.rs", "line": 30, "reference": { "target": "std::mem::transmute", "kind": "expr" } }
+    ]
+  },
+  "cases": [
+    {
+      "name": "two markers form a union",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::codec"] }, "must_not_contain": ["unsafe-fn", "unsafe-block"] },
+      "expect": { "violations": [
+        { "unit": "crate::codec", "file": "src/codec.rs", "line": 7, "column": 5, "marker": "unsafe-block" },
+        { "line": 12, "marker": "unsafe-fn" },
+        { "line": 20, "marker": "unsafe-block" }
+      ] }
+    },
+    {
+      "name": "one marker",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::codec"] }, "must_not_contain": ["unsafe-block"] },
+      "expect": { "violations": [ { "line": 7 }, { "line": 20 } ] }
+    },
+    {
+      "name": "markers with an ignored tag do not count",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::codec"] }, "must_not_contain": ["unsafe-fn", "unsafe-block"], "ignore_tags": ["test"] },
+      "expect": { "violations": [ { "line": 7 }, { "line": 12 } ] }
+    },
+    {
+      "name": "violations come in fact order across units",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_contain": ["unsafe-block"] },
+      "expect": { "violations": [ { "unit": "crate::codec", "line": 7 }, { "unit": "crate::ffi", "line": 3 }, { "unit": "crate::codec", "line": 20 } ] }
+    },
+    {
+      "name": "the kind filter and the candidate setting do not apply to markers",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::ffi"] }, "must_not_contain": ["unsafe-block"], "kinds": { "only": ["expr"] }, "candidates": "ignore" },
+      "expect": { "violations": [ { "unit": "crate::ffi", "line": 3 } ] }
+    },
+    {
+      "name": "a known marker that no fact has gives no violation",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_contain": ["unsafe-impl"] },
+      "expect": { "violations": [] }
+    },
+    {
+      "name": "a reference rule does not see markers",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::mem"] } },
+      "expect": { "violations": [ { "line": 30, "target": "std::mem::transmute" } ] }
+    },
+    {
+      "name": "error: a marker that the front end does not produce",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_contain": ["unsafe-block", "unsafe-blok"] },
+      "expect": { "errors": [ { "code": "unknown-marker", "role": "marker", "value": "unsafe-blok" } ] }
+    },
+    {
+      "name": "error: an empty marker list",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_contain": [] },
+      "expect": { "errors": [ { "code": "empty-list", "role": "marker" } ] }
+    }
+  ]
+}

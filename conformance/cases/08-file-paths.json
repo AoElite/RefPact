@@ -1,0 +1,80 @@
+{
+  "description": "File-shaped paths with `/` as separator, and segments that contain the separator. This is the shape of the TypeScript front end: a file is a unit, an export is `#name` below its file, a package is one segment `npm:name`.",
+  "separator": "/",
+  "facts": {
+    "units": ["src/app/main.ts", "src/app/util.ts", "src/db/client.ts", "src/db/index.ts"],
+    "items": ["src/db/client.ts/#query", "src/db/index.ts/#query"],
+    "kinds": ["import", "import-type", "dynamic-import"],
+    "facts": [
+      { "unit": "src/app/main.ts", "file": "src/app/main.ts", "line": 1,
+        "reference": { "target": ["npm:lodash", "#debounce"], "kind": "import" } },
+      { "unit": "src/app/main.ts", "file": "src/app/main.ts", "line": 2,
+        "reference": { "target": "src/db/index.ts/#query", "aliases": ["src/db/client.ts/#query"], "kind": "import" } },
+      { "unit": "src/app/util.ts", "file": "src/app/util.ts", "line": 1,
+        "reference": { "target": ["npm:@acme/db", "#Client"], "kind": "import-type" } },
+      { "unit": "src/app/util.ts", "file": "src/app/util.ts", "line": 9,
+        "reference": { "target": "src/db/client.ts", "kind": "dynamic-import" } },
+      { "unit": "src/db/index.ts", "file": "src/db/index.ts", "line": 1,
+        "reference": { "target": "src/db/client.ts/#query", "kind": "import" } }
+    ]
+  },
+  "cases": [
+    {
+      "name": "files under one path must not import one file, also through a barrel file",
+      "rule": { "name": "r", "subjects": { "any_of": ["src/app/**"] }, "must_not_use": { "any_of": ["src/db/client.ts"] } },
+      "expect": { "violations": [
+        { "unit": "src/app/main.ts", "line": 2, "target": "src/db/client.ts/#query", "written": "src/db/index.ts/#query" },
+        { "unit": "src/app/util.ts", "line": 9, "target": "src/db/client.ts", "written": null, "kind": "dynamic-import" }
+      ] }
+    },
+    {
+      "name": "a glob in a file path",
+      "rule": { "name": "r", "subjects": { "any_of": ["src/*/*.ts"], "except": ["src/db/*"] }, "must_not_use": { "any_of": ["src/*/client.ts"] } },
+      "expect": { "violations": [ { "unit": "src/app/main.ts", "line": 2 }, { "unit": "src/app/util.ts", "line": 9 } ] }
+    },
+    {
+      "name": "a package is one segment",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": [["npm:lodash"]] } },
+      "expect": { "violations": [ { "unit": "src/app/main.ts", "line": 1, "target": ["npm:lodash", "#debounce"] } ] }
+    },
+    {
+      "name": "one export of a package",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": [["npm:lodash", "#debounce"], ["npm:lodash", "#throttle"]] } },
+      "expect": { "violations": [ { "unit": "src/app/main.ts", "line": 1 } ] }
+    },
+    {
+      "name": "a segment may contain the separator",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": [["npm:@acme/db"]] } },
+      "expect": { "violations": [ { "unit": "src/app/util.ts", "line": 1, "target": ["npm:@acme/db", "#Client"], "kind": "import-type" } ] }
+    },
+    {
+      "name": "a segment that contains the separator is not split when it is compared",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": [["npm:@acme", "db"]] } },
+      "expect": { "violations": [] }
+    },
+    {
+      "name": "type-only imports can be left out",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": [["npm:@acme/db"]] }, "kinds": { "except": ["import-type"] } },
+      "expect": { "violations": [] }
+    },
+    {
+      "name": "a file inside the forbidden path may use itself, its neighbour may not",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["src/db/client.ts"] } },
+      "expect": { "violations": [
+        { "unit": "src/app/main.ts", "line": 2 },
+        { "unit": "src/app/util.ts", "line": 9 },
+        { "unit": "src/db/index.ts", "line": 1 }
+      ] }
+    },
+    {
+      "name": "error: a project file that does not exist",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["src/db/gone.ts"] } },
+      "expect": { "errors": [ { "code": "pattern-matches-nothing", "role": "target", "value": "src/db/gone.ts" } ] }
+    },
+    {
+      "name": "error: an export that the file does not have",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["src/db/client.ts/#gone"] } },
+      "expect": { "errors": [ { "code": "pattern-matches-nothing", "role": "target", "value": "src/db/client.ts/#gone" } ] }
+    }
+  ]
+}

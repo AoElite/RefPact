@@ -1,0 +1,5 @@
+# A workspace for the dependencies that the manifests name: one package on another, directly
+# or through others, for the build, for the tests or for one platform.
+[workspace]
+resolver = "2"
+members = ["domain", "api", "cli"]

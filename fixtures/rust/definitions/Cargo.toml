@@ -1,0 +1,12 @@
+# A crate that reaches items through the re-exports of another crate, which only the index of
+# rust-analyzer follows.
+[package]
+name = "definitions"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+facade = { path = "../stubs/facade" }
+
+[workspace]

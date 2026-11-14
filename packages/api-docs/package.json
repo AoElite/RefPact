@@ -1,0 +1,14 @@
+{
+  "name": "refpact-api-docs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Builds the API reference of the TypeScript package of refpact. TypeDoc does not run on TypeScript 7, so this package has its own TypeScript 6.",
+  "type": "module",
+  "scripts": {
+    "build": "typedoc"
+  },
+  "devDependencies": {
+    "typedoc": "0.28.20",
+    "typescript": "6.0.3"
+  }
+}

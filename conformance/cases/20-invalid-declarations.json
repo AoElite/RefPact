@@ -1,0 +1,160 @@
+{
+  "description": "A fact set is invalid when a declaration names a unit, an item kind, a visibility, a relation, a tag or a modifier that it does not declare.",
+  "separator": "::",
+  "facts": {
+    "units": [
+      "crate",
+      "crate::a"
+    ],
+    "tags": [
+      "test"
+    ],
+    "item_kinds": [
+      "struct"
+    ],
+    "visibilities": [
+      "pub"
+    ],
+    "relations": [
+      "derives"
+    ],
+    "facts": [],
+    "declarations": [
+      {
+        "path": "crate::a::A",
+        "name": "A",
+        "unit": "crate::a",
+        "file": "src/a.rs",
+        "line": 1,
+        "kind": "struct",
+        "visibility": "pub"
+      },
+      {
+        "path": "crate::b::B",
+        "name": "B",
+        "unit": "crate::b",
+        "file": "src/b.rs",
+        "line": 1,
+        "kind": "class",
+        "visibility": "exported",
+        "relations": [
+          {
+            "relation": "extends",
+            "target": "crate::a::A"
+          }
+        ],
+        "tags": [
+          "slow"
+        ],
+        "modifiers": [
+          "async",
+          "pure"
+        ]
+      },
+      {
+        "path": "crate::a::C",
+        "name": "C",
+        "unit": "crate::a",
+        "file": "src/a.rs",
+        "line": 2,
+        "kind": "class",
+        "visibility": "pub"
+      }
+    ],
+    "modifiers": [
+      "async"
+    ]
+  },
+  "cases": [
+    {
+      "name": "every offending value of a declaration is reported once",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "all": true
+        },
+        "items": {
+          "must": "not_exist"
+        }
+      },
+      "expect": {
+        "errors": [
+          {
+            "code": "invalid-facts",
+            "role": "unit",
+            "value": "crate::b"
+          },
+          {
+            "code": "invalid-facts",
+            "role": "item-kind",
+            "value": "class"
+          },
+          {
+            "code": "invalid-facts",
+            "role": "visibility",
+            "value": "exported"
+          },
+          {
+            "code": "invalid-facts",
+            "role": "relation",
+            "value": "extends"
+          },
+          {
+            "code": "invalid-facts",
+            "role": "tag",
+            "value": "slow"
+          },
+          {
+            "code": "invalid-facts",
+            "role": "modifier",
+            "value": "pure"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a rule about references also fails on invalid declarations",
+      "rule": {
+        "name": "r",
+        "subjects": {
+          "all": true
+        },
+        "must_be_used": {}
+      },
+      "expect": {
+        "errors": [
+          {
+            "code": "invalid-facts",
+            "role": "unit",
+            "value": "crate::b"
+          },
+          {
+            "code": "invalid-facts",
+            "role": "item-kind",
+            "value": "class"
+          },
+          {
+            "code": "invalid-facts",
+            "role": "visibility",
+            "value": "exported"
+          },
+          {
+            "code": "invalid-facts",
+            "role": "relation",
+            "value": "extends"
+          },
+          {
+            "code": "invalid-facts",
+            "role": "tag",
+            "value": "slow"
+          },
+          {
+            "code": "invalid-facts",
+            "role": "modifier",
+            "value": "pure"
+          }
+        ]
+      }
+    }
+  ]
+}

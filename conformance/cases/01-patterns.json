@@ -1,0 +1,102 @@
+{
+  "description": "Patterns: exact match for subjects, match within for targets, globs and `**`.",
+  "separator": "::",
+  "facts": {
+    "units": [
+      "crate", "crate::frontend", "crate::frontend::passes", "crate::frontend::passes::inline",
+      "crate::frontend::passes::dce_pass", "crate::codegen", "crate::interpreter", "crate::interpreter::gc"
+    ],
+    "items": ["crate::codegen::Generator"],
+    "kinds": ["use", "expr"],
+    "facts": [
+      { "unit": "crate::frontend::passes::inline", "file": "src/frontend/passes/inline.rs", "line": 3, "column": 5,
+        "reference": { "target": "crate::codegen::Generator", "kind": "use" } },
+      { "unit": "crate::frontend::passes::dce_pass", "file": "src/frontend/passes/dce_pass.rs", "line": 7,
+        "reference": { "target": "std::fs::read", "kind": "expr" } },
+      { "unit": "crate::interpreter", "file": "src/interpreter/mod.rs", "line": 2,
+        "reference": { "target": "crate::codegen", "kind": "use" } },
+      { "unit": "crate::interpreter::gc", "file": "src/interpreter/gc.rs", "line": 9,
+        "reference": { "target": "std::fsx::read", "kind": "expr" } },
+      { "unit": "crate::frontend", "file": "src/frontend/mod.rs", "line": 4,
+        "reference": { "target": "std::fs", "kind": "expr" } }
+    ]
+  },
+  "cases": [
+    {
+      "name": "a subject without wildcard selects one unit only",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::interpreter"] },
+                "must_not_use": { "any_of": ["crate::codegen", "std::fsx"] } },
+      "expect": { "violations": [
+        { "unit": "crate::interpreter", "file": "src/interpreter/mod.rs", "line": 2, "column": 1,
+          "target": "crate::codegen", "written": null, "kind": "use", "certainty": "exact" }
+      ] }
+    },
+    {
+      "name": "`**` at the end selects the unit and all units below it",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::interpreter::**"] },
+                "must_not_use": { "any_of": ["crate::codegen", "std::fsx"] } },
+      "expect": { "violations": [
+        { "unit": "crate::interpreter", "line": 2, "target": "crate::codegen" },
+        { "unit": "crate::interpreter::gc", "line": 9, "target": "std::fsx::read" }
+      ] }
+    },
+    {
+      "name": "`*` is exactly one segment",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend::*"] },
+                "must_not_use": { "any_of": ["std::fs", "crate::codegen"] } },
+      "expect": { "violations": [] }
+    },
+    {
+      "name": "`*` inside a segment matches part of the segment",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend::passes::*_pass"] },
+                "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [
+        { "unit": "crate::frontend::passes::dce_pass", "line": 7, "target": "std::fs::read" }
+      ] }
+    },
+    {
+      "name": "`**` in the middle of a subject",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::**::inline"] },
+                "must_not_use": { "any_of": ["crate::codegen"] } },
+      "expect": { "violations": [
+        { "unit": "crate::frontend::passes::inline", "line": 3, "column": 5, "target": "crate::codegen::Generator" }
+      ] }
+    },
+    {
+      "name": "a target covers the path itself and everything inside, but not a longer name",
+      "rule": { "name": "r", "subjects": { "all": true },
+                "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [
+        { "unit": "crate::frontend::passes::dce_pass", "target": "std::fs::read" },
+        { "unit": "crate::frontend", "target": "std::fs" }
+      ] }
+    },
+    {
+      "name": "a target with `**` at the end is equal to the target without it",
+      "rule": { "name": "r", "subjects": { "all": true },
+                "must_not_use": { "any_of": ["crate::codegen::**"] } },
+      "expect": { "violations": [
+        { "unit": "crate::frontend::passes::inline", "target": "crate::codegen::Generator" },
+        { "unit": "crate::interpreter", "target": "crate::codegen" }
+      ] }
+    },
+    {
+      "name": "a target does not cover the thing that contains it",
+      "rule": { "name": "r", "subjects": { "all": true },
+                "must_not_use": { "any_of": ["std::fs::read"] } },
+      "expect": { "violations": [
+        { "unit": "crate::frontend::passes::dce_pass", "target": "std::fs::read" }
+      ] }
+    },
+    {
+      "name": "a glob in a target segment",
+      "rule": { "name": "r", "subjects": { "all": true },
+                "must_not_use": { "any_of": ["std::fs*"] } },
+      "expect": { "violations": [
+        { "unit": "crate::frontend::passes::dce_pass", "target": "std::fs::read" },
+        { "unit": "crate::interpreter::gc", "target": "std::fsx::read" },
+        { "unit": "crate::frontend", "target": "std::fs" }
+      ] }
+    }
+  ]
+}

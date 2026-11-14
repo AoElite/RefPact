@@ -1,0 +1,155 @@
+{
+  "description": "Targets: union of several targets, existence checks, aliases, properties, and self-use.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate", "crate::frontend", "crate::codegen", "crate::interpreter", "crate::cache", "crate::prelude"],
+    "items": ["crate::codegen::Generator", "crate::cache::Store", "crate::interpreter::Heap", "crate::Config"],
+    "kinds": ["use", "expr", "type"],
+    "properties": ["version", "license"],
+    "facts": [
+      { "unit": "crate::frontend", "file": "src/frontend.rs", "line": 3,
+        "reference": { "target": "crate::codegen::Generator", "kind": "type", "properties": { "version": "1.2.0", "license": "MIT OR Apache-2.0" } } },
+      { "unit": "crate::frontend", "file": "src/frontend.rs", "line": 8,
+        "reference": { "target": "crate::prelude::Generator", "aliases": ["crate::codegen::Generator"], "kind": "expr" } },
+      { "unit": "crate::codegen", "file": "src/codegen.rs", "line": 5,
+        "reference": { "target": "crate::codegen::Generator", "kind": "expr" } },
+      { "unit": "crate::frontend", "file": "src/frontend.rs", "line": 12,
+        "reference": { "target": "crate::frontend::helper", "kind": "expr" } },
+      { "unit": "crate::interpreter", "file": "src/interpreter.rs", "line": 2,
+        "reference": { "target": "crate::cache::Store", "kind": "use" } },
+      { "unit": "crate", "file": "src/lib.rs", "line": 1,
+        "reference": { "target": "crate::codegen", "kind": "use" } },
+      { "unit": "crate::codegen", "file": "src/codegen.rs", "line": 9,
+        "reference": { "target": "crate::Config", "kind": "use" } }
+    ]
+  },
+  "cases": [
+    {
+      "name": "one target",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend"] }, "must_not_use": { "any_of": ["crate::codegen"] } },
+      "expect": { "violations": [
+        { "line": 3, "target": "crate::codegen::Generator", "written": null, "kind": "type" },
+        { "line": 8, "target": "crate::codegen::Generator", "written": "crate::prelude::Generator", "kind": "expr" }
+      ] }
+    },
+    {
+      "name": "two targets, the first is violated: same result as one target",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend"] }, "must_not_use": { "any_of": ["crate::codegen", "crate::interpreter"] } },
+      "expect": { "violations": [
+        { "line": 3, "target": "crate::codegen::Generator" },
+        { "line": 8, "target": "crate::codegen::Generator" }
+      ] }
+    },
+    {
+      "name": "two targets, the second is violated: same result as one target",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend"] }, "must_not_use": { "any_of": ["crate::interpreter", "crate::codegen"] } },
+      "expect": { "violations": [
+        { "line": 3, "target": "crate::codegen::Generator" },
+        { "line": 8, "target": "crate::codegen::Generator" }
+      ] }
+    },
+    {
+      "name": "error: five targets, one matches nothing, although another is violated",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend"] },
+                "must_not_use": { "any_of": ["crate::interpreter", "crate::cache", "crate::prelude::nothing::**", "crate::codegen", "crate::Config"] } },
+      "expect": { "errors": [ { "code": "pattern-matches-nothing", "role": "target", "value": "crate::prelude::nothing::**" } ] }
+    },
+    {
+      "name": "four targets that exist, one is violated",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend"] },
+                "must_not_use": { "any_of": ["crate::interpreter", "crate::cache", "crate::codegen", "crate::Config"] } },
+      "expect": { "violations": [ { "line": 3 }, { "line": 8 } ] }
+    },
+    {
+      "name": "two subjects and two targets: every pair counts",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend", "crate::interpreter"] }, "must_not_use": { "any_of": ["crate::codegen", "crate::cache"] } },
+      "expect": { "violations": [
+        { "unit": "crate::frontend", "line": 3 },
+        { "unit": "crate::frontend", "line": 8 },
+        { "unit": "crate::interpreter", "line": 2, "target": "crate::cache::Store" }
+      ] }
+    },
+    {
+      "name": "error: one of two targets matches nothing in the project",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend"] }, "must_not_use": { "any_of": ["crate::codegen", "crate::codgen"] } },
+      "expect": { "errors": [ { "code": "pattern-matches-nothing", "role": "target", "value": "crate::codgen" } ] }
+    },
+    {
+      "name": "error: an unknown item in a known unit",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["crate::codegen::Genrator"] } },
+      "expect": { "errors": [ { "code": "pattern-matches-nothing", "role": "target", "value": "crate::codegen::Genrator" } ] }
+    },
+    {
+      "name": "a target inside a known item is accepted",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["crate::codegen::Generator::new"] } },
+      "expect": { "violations": [] }
+    },
+    {
+      "name": "an unverified target is not checked for existence",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "unverified": ["crate::codegen::Generated"] } },
+      "expect": { "violations": [] }
+    },
+    {
+      "name": "an unverified target forbids like any other target",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::interpreter"] }, "must_not_use": { "any_of": ["crate::codegen"], "unverified": ["crate::cache::Store"] } },
+      "expect": { "violations": [ { "unit": "crate::interpreter", "line": 2, "target": "crate::cache::Store" } ] }
+    },
+    {
+      "name": "a target outside the project is not checked for existence",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["nosuchcrate::thing"] } },
+      "expect": { "violations": [] }
+    },
+    {
+      "name": "a target with a wildcard in the first segment is not checked for existence",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["*::nothing", "**::nothing"] } },
+      "expect": { "violations": [] }
+    },
+    {
+      "name": "a unit may use itself; other units may not",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["crate::codegen"] } },
+      "expect": { "violations": [
+        { "unit": "crate::frontend", "line": 3 },
+        { "unit": "crate::frontend", "line": 8 },
+        { "unit": "crate", "line": 1, "target": "crate::codegen" }
+      ] }
+    },
+    {
+      "name": "a rule whose only matches are self-use passes",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "unverified": ["crate::frontend"] } },
+      "expect": { "violations": [] }
+    },
+    {
+      "name": "a unit below does not own the items of the unit above",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["crate::Config"] } },
+      "expect": { "violations": [ { "unit": "crate::codegen", "line": 9, "target": "crate::Config" } ] }
+    },
+    {
+      "name": "when the written path is forbidden, it is reported and not the alias",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend"] }, "must_not_use": { "any_of": ["crate::prelude", "crate::codegen"] } },
+      "expect": { "violations": [
+        { "line": 3, "target": "crate::codegen::Generator", "written": null },
+        { "line": 8, "target": "crate::prelude::Generator", "written": null }
+      ] }
+    },
+    {
+      "name": "a rule names the properties that its check reads",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend"] }, "must_not_use": { "any_of": ["crate::codegen"] }, "properties": ["license", "version"] },
+      "expect": { "violations": [ { "line": 3 }, { "line": 8 } ] }
+    },
+    {
+      "name": "error: a property that the front end does not produce",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::frontend"] }, "must_not_use": { "any_of": ["crate::codegen"] }, "properties": ["license", "licence"] },
+      "expect": { "errors": [ { "code": "unknown-property", "role": "property", "value": "licence" } ] }
+    },
+    {
+      "name": "error: no target at all",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": [] } },
+      "expect": { "errors": [ { "code": "empty-list", "role": "target" } ] }
+    },
+    {
+      "name": "error: no target at all, both lists given",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": [], "unverified": [] } },
+      "expect": { "errors": [ { "code": "empty-list", "role": "target" } ] }
+    }
+  ]
+}

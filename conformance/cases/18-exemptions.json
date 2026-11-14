@@ -1,0 +1,46 @@
+{
+  "description": "Exemptions: a rule does not see the references that an exemption lets pass, and an exemption that lets nothing pass is an error.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate", "crate::a", "crate::b", "crate::config", "crate::ui"],
+    "items": ["crate::a::g", "crate::b::f", "crate::config::open"],
+    "kinds": ["use", "expr"],
+    "markers": ["unsafe"],
+    "tags": ["test"],
+    "facts": [
+      {"unit": "crate::config", "file": "src/config.rs", "line": 1, "reference": {"target": "std::fs::read_to_string", "kind": "expr"}},
+      {"unit": "crate::ui", "file": "src/ui.rs", "line": 1, "reference": {"target": "std::fs::write", "kind": "expr"}},
+      {"unit": "crate::a", "file": "src/a.rs", "line": 1, "reference": {"target": "crate::b::f", "kind": "use"}},
+      {"unit": "crate::b", "file": "src/b.rs", "line": 1, "reference": {"target": "crate::a::g", "kind": "use"}},
+      {"unit": "crate::config", "file": "src/config.rs", "line": 2, "reference": {"target": "std::fs::read", "kind": "expr"}, "tags": ["test"]},
+      {"unit": "crate::ui", "file": "src/ui.rs", "line": 2, "marker": "unsafe"},
+      {"unit": "crate::ui", "file": "src/ui.rs", "line": 3, "reference": {"target": "crate::config::open", "aliases": ["std::fs::File"], "kind": "use"}}
+    ]
+  },
+  "cases": [
+    {"name": "an exempt reference is not a violation", "rule": {"name": "r", "subjects": {"all": true}, "must_not_use": {"any_of": ["std::fs"]}, "exemptions": [{"from": ["crate::config"], "to": ["std::fs::read_to_string"]}]}, "expect": {"violations": [
+      {"unit": "crate::ui", "line": 1, "target": "std::fs::write"},
+      {"unit": "crate::config", "line": 2, "target": "std::fs::read"},
+      {"unit": "crate::ui", "line": 3, "target": "std::fs::File", "written": "crate::config::open"}
+    ]}},
+    {"name": "an exemption needs both its unit and its path", "rule": {"name": "r", "subjects": {"all": true}, "must_not_use": {"any_of": ["std::fs"]}, "exemptions": [{"from": ["crate::config"], "to": ["std::fs::read_to_string"]}, {"from": ["crate::ui"], "to": ["std::fs::read_to_string", "std::fs::write"]}]}, "expect": {"violations": [
+      {"unit": "crate::config", "line": 2},
+      {"unit": "crate::ui", "line": 3}
+    ]}},
+    {"name": "the path of an exemption can be any path of the reference", "rule": {"name": "r", "subjects": {"any_of": ["crate::ui"]}, "must_not_use": {"any_of": ["std::fs"]}, "exemptions": [{"from": ["crate::ui"], "to": ["crate::config"]}]}, "expect": {"violations": [
+      {"unit": "crate::ui", "line": 1}
+    ]}},
+    {"name": "an exemption takes an edge out of a cycle", "rule": {"name": "r", "subjects": {"any_of": ["crate::a", "crate::b"]}, "must_be_acyclic": {}, "exemptions": [{"from": ["crate::b"], "to": ["crate::a"]}]}, "expect": {"violations": []}},
+    {"name": "without the exemption the cycle is there", "rule": {"name": "r", "subjects": {"any_of": ["crate::a", "crate::b"]}, "must_be_acyclic": {}}, "expect": {"violations": [{"unit": "crate::a", "detail": "cycle", "size": 2}]}},
+    {"name": "an exempt reference is not a use", "rule": {"name": "r", "subjects": {"any_of": ["crate::a", "crate::b"]}, "must_be_used": {}, "exemptions": [{"from": ["crate::a"], "to": ["crate::b"]}]}, "expect": {"violations": [{"unit": "crate::b", "detail": "unused"}]}},
+    {"name": "an exempt reference is not an edge of a chain", "rule": {"name": "r", "subjects": {"any_of": ["crate::b"]}, "must_not_reach": {"any_of": ["crate::b::f"]}, "exemptions": [{"from": ["crate::b"], "to": ["crate::a"]}]}, "expect": {"violations": []}},
+    {"name": "an exempt reference is not the end of a chain", "rule": {"name": "r", "subjects": {"any_of": ["crate::a"]}, "must_not_reach": {"any_of": ["crate::b::f"]}, "exemptions": [{"from": ["crate::a"], "to": ["crate::b::f"]}]}, "expect": {"violations": []}},
+    {"name": "an exemption applies to the users of a unit", "rule": {"name": "r", "subjects": {"any_of": ["crate::b"]}, "must_only_be_used_by": {"users": ["crate::ui"]}, "exemptions": [{"from": ["crate::a"], "to": ["crate::b::f"]}]}, "expect": {"violations": []}},
+    {"name": "an exemption that lets no reference pass is an error", "rule": {"name": "r", "subjects": {"all": true}, "must_not_use": {"any_of": ["std::fs"]}, "exemptions": [{"from": ["crate::config"], "to": ["std::fs::read_to_string"]}, {"from": ["crate::config", "crate::a"], "to": ["std::fs::write", "std::net"]}]}, "expect": {"errors": [{"code": "unused-exemption", "role": "exemption", "value": "crate::config, crate::a -> std::fs::write, std::net"}]}},
+    {"name": "an exemption counts only references that pass the filters", "rule": {"name": "r", "subjects": {"all": true}, "must_not_use": {"any_of": ["std::fs"]}, "ignore_tags": ["test"], "exemptions": [{"from": ["crate::config"], "to": ["std::fs::read"]}]}, "expect": {"errors": [{"code": "unused-exemption", "role": "exemption", "value": "crate::config -> std::fs::read"}]}},
+    {"name": "a rule about markers has no use for an exemption", "rule": {"name": "r", "subjects": {"all": true}, "must_not_contain": ["unsafe"], "exemptions": [{"from": ["crate::ui"], "to": ["std::fs::write"]}]}, "expect": {"errors": [{"code": "unused-exemption", "role": "exemption", "value": "crate::ui -> std::fs::write"}]}},
+    {"name": "a baseline applies after the exemptions", "rule": {"name": "r", "subjects": {"all": true}, "must_not_use": {"any_of": ["std::fs"]}, "exemptions": [{"from": ["crate::config", "crate::ui"], "to": ["std::fs::read_to_string", "std::fs::File"]}]}, "baseline": "r\tcrate::ui\tuses expr std::fs::write\t1\nr\tcrate::config\tuses expr std::fs::read\t1\n", "expect": {"violations": []}},
+    {"name": "empty lists in an exemption are errors", "rule": {"name": "r", "subjects": {"all": true}, "must_not_use": {"any_of": ["std::fs"]}, "exemptions": [{"from": [], "to": []}]}, "expect": {"errors": [{"code": "empty-list", "role": "exemption-from"}, {"code": "empty-list", "role": "exemption-to"}]}},
+    {"name": "patterns of an exemption that match nothing are errors", "rule": {"name": "r", "subjects": {"all": true}, "must_not_use": {"any_of": ["std::fs"]}, "exemptions": [{"from": ["crate::nothing", ["a**"]], "to": ["crate::config::shut", ["b**"], "std::anything"]}]}, "expect": {"errors": [{"code": "pattern-matches-nothing", "role": "exemption-from", "value": "crate::nothing"}, {"code": "invalid-pattern", "role": "exemption-from", "value": "a**"}, {"code": "pattern-matches-nothing", "role": "exemption-to", "value": "crate::config::shut"}, {"code": "invalid-pattern", "role": "exemption-to", "value": "b**"}]}}
+  ]
+}

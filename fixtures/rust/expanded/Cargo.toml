@@ -1,0 +1,12 @@
+# A crate whose macros write code that the source does not show: a derive, an attribute, and
+# the body of a `macro_rules!`.
+[package]
+name = "expanded"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+derives = { path = "../stubs/derives" }
+
+[workspace]

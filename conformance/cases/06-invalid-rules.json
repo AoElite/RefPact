@@ -1,0 +1,72 @@
+{
+  "description": "Invalid rules: names, invalid patterns, and the order of several errors.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate", "crate::a"],
+    "kinds": ["expr"],
+    "tags": ["test"],
+    "facts": [
+      { "unit": "crate::a", "file": "src/a.rs", "line": 1, "reference": { "target": "std::fs::read", "kind": "expr" } }
+    ]
+  },
+  "cases": [
+    {
+      "name": "error: a rule without a name",
+      "rule": { "name": "", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [ { "code": "empty-name" } ] }
+    },
+    {
+      "name": "error: a subject pattern with an empty segment",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [ { "code": "invalid-pattern", "role": "subject", "value": "crate::" } ] }
+    },
+    {
+      "name": "error: a subject pattern with no segment",
+      "rule": { "name": "r", "subjects": { "any_of": [[]] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [ { "code": "invalid-pattern", "role": "subject", "value": "" } ] }
+    },
+    {
+      "name": "error: `**` together with other characters in one segment",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs**"] } },
+      "expect": { "errors": [ { "code": "invalid-pattern", "role": "target", "value": "std::fs**" } ] }
+    },
+    {
+      "name": "error: an invalid exception",
+      "rule": { "name": "r", "subjects": { "all": true, "except": ["crate::::a"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "errors": [ { "code": "invalid-pattern", "role": "subject-exception", "value": "crate::::a" } ] }
+    },
+    {
+      "name": "error: an invalid unverified target",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "unverified": [["crate", ""]] } },
+      "expect": { "errors": [ { "code": "invalid-pattern", "role": "unverified-target", "value": "crate::" } ] }
+    },
+    {
+      "name": "error: all problems of one rule are reported in the order of the specification",
+      "rule": { "name": "", "subjects": { "any_of": ["crate::zz", "crate::a"], "except": ["crate::yy"] },
+                "must_not_use": { "any_of": ["crate::nothing", "std::fs"], "unverified": ["a**"] },
+                "kinds": { "only": ["nope"] }, "ignore_tags": ["nope"] },
+      "expect": { "errors": [
+        { "code": "empty-name" },
+        { "code": "pattern-matches-nothing", "role": "subject", "value": "crate::zz" },
+        { "code": "pattern-matches-nothing", "role": "subject-exception", "value": "crate::yy" },
+        { "code": "pattern-matches-nothing", "role": "target", "value": "crate::nothing" },
+        { "code": "invalid-pattern", "role": "unverified-target", "value": "a**" },
+        { "code": "unknown-kind", "role": "kind", "value": "nope" },
+        { "code": "unknown-tag", "role": "tag", "value": "nope" }
+      ] }
+    },
+    {
+      "name": "error: an empty subject list does not add `no-subjects`",
+      "rule": { "name": "r", "subjects": { "any_of": [] }, "must_not_use": { "any_of": ["crate::nothing"] } },
+      "expect": { "errors": [
+        { "code": "empty-list", "role": "subject" },
+        { "code": "pattern-matches-nothing", "role": "target", "value": "crate::nothing" }
+      ] }
+    },
+    {
+      "name": "a valid rule on the same facts",
+      "rule": { "name": "r", "subjects": { "any_of": ["crate::a"] }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [ { "unit": "crate::a", "file": "src/a.rs", "line": 1, "column": 1, "target": "std::fs::read" } ] }
+    }
+  ]
+}

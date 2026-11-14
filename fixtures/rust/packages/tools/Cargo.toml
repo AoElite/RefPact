@@ -1,0 +1,16 @@
+# No `members` entry names this package. The cli depends on it by a path, so Cargo makes it
+# a member. Its library has a name and a root file of its own.
+[package]
+name = "shop-tools"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "tooling"
+path = "code/tooling.rs"
+
+[dependencies]
+getrandom = { path = "../../stubs/getrandom" }
+# A later version of the package that the facade needs.
+engine = { path = "../../stubs/engine-next" }

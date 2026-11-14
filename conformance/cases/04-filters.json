@@ -1,0 +1,86 @@
+{
+  "description": "Filters: reference kinds, tags and candidates.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate::a"],
+    "kinds": ["use", "expr", "type", "macro-tokens"],
+    "tags": ["test"],
+    "facts": [
+      { "unit": "crate::a", "file": "src/a.rs", "line": 1, "reference": { "target": "std::fs", "kind": "use" } },
+      { "unit": "crate::a", "file": "src/a.rs", "line": 2, "reference": { "target": "std::fs::read", "kind": "expr" } },
+      { "unit": "crate::a", "file": "src/a.rs", "line": 3, "tags": ["test"], "reference": { "target": "std::fs::File", "kind": "type" } },
+      { "unit": "crate::a", "file": "src/a.rs", "line": 4, "reference": { "target": "std::fs::write", "kind": "macro-tokens" } },
+      { "unit": "crate::a", "file": "src/a.rs", "line": 5, "note": "through the glob import at line 1",
+        "reference": { "target": "rand::thread_rng", "kind": "expr", "certainty": "candidate" } }
+    ]
+  },
+  "cases": [
+    {
+      "name": "by default all kinds and all tags count",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] } },
+      "expect": { "violations": [ { "line": 1, "kind": "use" }, { "line": 2, "kind": "expr" }, { "line": 3, "kind": "type" }, { "line": 4, "kind": "macro-tokens" } ] }
+    },
+    {
+      "name": "only one kind",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] }, "kinds": { "only": ["use"] } },
+      "expect": { "violations": [ { "line": 1 } ] }
+    },
+    {
+      "name": "only two kinds",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] }, "kinds": { "only": ["expr", "use"] } },
+      "expect": { "violations": [ { "line": 1 }, { "line": 2 } ] }
+    },
+    {
+      "name": "all kinds except one",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] }, "kinds": { "except": ["macro-tokens"] } },
+      "expect": { "violations": [ { "line": 1 }, { "line": 2 }, { "line": 3 } ] }
+    },
+    {
+      "name": "an empty `except` list of kinds changes nothing",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] }, "kinds": { "except": [] } },
+      "expect": { "violations": [ { "line": 1 }, { "line": 2 }, { "line": 3 }, { "line": 4 } ] }
+    },
+    {
+      "name": "facts with an ignored tag do not count",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] }, "ignore_tags": ["test"] },
+      "expect": { "violations": [ { "line": 1 }, { "line": 2 }, { "line": 4 } ] }
+    },
+    {
+      "name": "candidates count by default, and the note is copied",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["rand::thread_rng"] } },
+      "expect": { "violations": [
+        { "line": 5, "target": "rand::thread_rng", "certainty": "candidate", "note": "through the glob import at line 1" }
+      ] }
+    },
+    {
+      "name": "candidates can be ignored",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["rand::thread_rng"] }, "candidates": "ignore" },
+      "expect": { "violations": [] }
+    },
+    {
+      "name": "ignoring candidates keeps exact facts",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["rand", "std::fs::read"] }, "candidates": "ignore" },
+      "expect": { "violations": [ { "line": 2, "certainty": "exact" } ] }
+    },
+    {
+      "name": "error: a kind that the front end does not produce",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] }, "kinds": { "only": ["use", "imports"] } },
+      "expect": { "errors": [ { "code": "unknown-kind", "role": "kind", "value": "imports" } ] }
+    },
+    {
+      "name": "error: an unknown kind in `except`",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] }, "kinds": { "except": ["macro"] } },
+      "expect": { "errors": [ { "code": "unknown-kind", "role": "kind", "value": "macro" } ] }
+    },
+    {
+      "name": "error: an empty `only` list of kinds",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] }, "kinds": { "only": [] } },
+      "expect": { "errors": [ { "code": "empty-list", "role": "kind" } ] }
+    },
+    {
+      "name": "error: a tag that the front end does not produce",
+      "rule": { "name": "r", "subjects": { "all": true }, "must_not_use": { "any_of": ["std::fs"] }, "ignore_tags": ["tests"] },
+      "expect": { "errors": [ { "code": "unknown-tag", "role": "tag", "value": "tests" } ] }
+    }
+  ]
+}

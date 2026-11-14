@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+# xtask holds the tasks of the repository (`cargo xtask`). It is not published.
+members = ["crates/refpact-core", "crates/refpact", "crates/refpact-wasm", "xtask"]
+exclude = ["fixtures"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+# The oldest Rust that builds the crate. CI checks it.
+rust-version = "1.80"
+license = "MIT"
+repository = "https://github.com/AoElite/RefPact"
+keywords = ["architecture", "testing", "dependencies", "lint", "modules"]
+categories = ["development-tools::testing"]
+publish = false
+
+[workspace.dependencies]
+# Parses Rust source into a syntax tree. No default features: no `quote`, no proc-macro bridge.
+syn = { version = "3", default-features = false, features = ["full", "parsing", "visit"] }
+# Token streams and, through `span-locations`, the line and column of every token.
+proc-macro2 = { version = "1", default-features = false, features = ["span-locations"] }
+# Test-only: reads the language-neutral conformance cases. Never reaches a consumer.
+serde_json = "1"
+
+# The tests parse Rust source. An optimized parser makes them several times faster, and the
+# workspace crates themselves are still built for debugging. Users get the same advice in
+# docs/rust.md.
+[profile.dev.package.syn]
+opt-level = 3
+
+[profile.dev.package.proc-macro2]
+opt-level = 3
+
+# The WebAssembly build of the core that the TypeScript package runs (`cargo xtask wasm`).
+[profile.wasm]
+inherits = "release"
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

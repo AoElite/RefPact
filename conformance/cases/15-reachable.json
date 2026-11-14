@@ -1,0 +1,32 @@
+{
+  "description": "`must_be_reachable_from`: a chain of references leads from a root to each unit.",
+  "separator": "::",
+  "facts": {
+    "units": ["crate", "crate::api", "crate::api::http", "crate::core", "crate::core::model", "crate::dead", "crate::dead::inner", "crate::island", "crate::island::part", "crate::tools", "crate::tools::cli", "crate::testonly"],
+    "kinds": ["use"],
+    "tags": ["test"],
+    "facts": [
+      {"unit": "crate", "file": "src/lib.rs", "line": 1, "reference": {"target": "crate::api::http::serve", "kind": "use"}},
+      {"unit": "crate::api::http", "file": "src/api/http.rs", "line": 1, "reference": {"target": "crate::core::model::Order", "kind": "use"}},
+      {"unit": "crate::dead", "file": "src/dead/mod.rs", "line": 1, "reference": {"target": "crate::dead::inner::x", "kind": "use"}},
+      {"unit": "crate::island", "file": "src/island/mod.rs", "line": 1, "reference": {"target": "crate::island::part::p", "kind": "use"}},
+      {"unit": "crate::island::part", "file": "src/island/part.rs", "line": 1, "reference": {"target": "crate::island::q", "kind": "use"}},
+      {"unit": "crate::tools::cli", "file": "src/tools/cli.rs", "line": 1, "reference": {"target": "crate::core::model::Order", "kind": "use"}},
+      {"unit": "crate::core::model", "file": "src/core/model.rs", "line": 1, "reference": {"target": "crate::testonly::f", "kind": "use"}, "tags": ["test"]},
+      {"unit": "crate::dead::inner", "file": "src/dead/inner.rs", "line": 1, "reference": {"target": "crate::core::helper", "kind": "use"}},
+      {"unit": "crate::api::http", "file": "src/api/http.rs", "line": 2, "reference": {"target": "crate::facade::X", "kind": "use", "aliases": ["crate::island::part::X"]}}
+    ]
+  },
+  "cases": [
+    {"name": "a unit that no chain from a root leads to is a violation", "rule": {"name": "r", "subjects": {"all": true}, "must_be_reachable_from": {"roots": ["crate"]}}, "expect": {"violations": [{"unit": "crate::dead", "detail": "unreachable", "line": 0, "column": 0, "file": "src/dead/mod.rs"}, {"unit": "crate::dead::inner", "detail": "unreachable", "line": 0, "column": 0, "file": "src/dead/inner.rs"}, {"unit": "crate::island", "detail": "unreachable", "line": 0, "column": 0, "file": "src/island/mod.rs"}, {"unit": "crate::island::part", "detail": "unreachable", "line": 0, "column": 0, "file": "src/island/part.rs"}, {"unit": "crate::tools", "detail": "unreachable", "line": 0, "column": 0, "file": ""}, {"unit": "crate::tools::cli", "detail": "unreachable", "line": 0, "column": 0, "file": "src/tools/cli.rs"}]}},
+    {"name": "several roots form a union, and a unit above a reached unit is reachable", "rule": {"name": "r", "subjects": {"all": true}, "must_be_reachable_from": {"roots": ["crate", "crate::tools::cli"]}}, "expect": {"violations": [{"unit": "crate::dead", "detail": "unreachable", "line": 0, "column": 0, "file": "src/dead/mod.rs"}, {"unit": "crate::dead::inner", "detail": "unreachable", "line": 0, "column": 0, "file": "src/dead/inner.rs"}, {"unit": "crate::island", "detail": "unreachable", "line": 0, "column": 0, "file": "src/island/mod.rs"}, {"unit": "crate::island::part", "detail": "unreachable", "line": 0, "column": 0, "file": "src/island/part.rs"}]}},
+    {"name": "ignored tags apply to the edges", "rule": {"name": "r", "subjects": {"all": true}, "must_be_reachable_from": {"roots": ["crate"]}, "ignore_tags": ["test"]}, "expect": {"violations": [{"unit": "crate::dead", "detail": "unreachable", "line": 0, "column": 0, "file": "src/dead/mod.rs"}, {"unit": "crate::dead::inner", "detail": "unreachable", "line": 0, "column": 0, "file": "src/dead/inner.rs"}, {"unit": "crate::island", "detail": "unreachable", "line": 0, "column": 0, "file": "src/island/mod.rs"}, {"unit": "crate::island::part", "detail": "unreachable", "line": 0, "column": 0, "file": "src/island/part.rs"}, {"unit": "crate::tools", "detail": "unreachable", "line": 0, "column": 0, "file": ""}, {"unit": "crate::tools::cli", "detail": "unreachable", "line": 0, "column": 0, "file": "src/tools/cli.rs"}, {"unit": "crate::testonly", "detail": "unreachable", "line": 0, "column": 0, "file": ""}]}},
+    {"name": "a unit above a root is reachable, a unit below a reached unit is not", "rule": {"name": "r", "subjects": {"any_of": ["crate", "crate::core", "crate::core::model", "crate::api"]}, "must_be_reachable_from": {"roots": ["crate::dead"]}}, "expect": {"violations": [{"unit": "crate::api", "detail": "unreachable", "line": 0, "column": 0}, {"unit": "crate::core::model", "detail": "unreachable", "line": 0, "column": 0}]}},
+    {"name": "only selected units are reported", "rule": {"name": "r", "subjects": {"any_of": ["crate::api::**", "crate::core::**", "crate::island"]}, "must_be_reachable_from": {"roots": ["crate"]}}, "expect": {"violations": [{"unit": "crate::island", "detail": "unreachable", "line": 0, "column": 0, "file": "src/island/mod.rs"}]}},
+    {"name": "a rule that selects only roots is an error", "rule": {"name": "r", "subjects": {"any_of": ["crate"]}, "must_be_reachable_from": {"roots": ["crate"]}}, "expect": {"errors": [{"code": "no-subjects"}]}},
+    {"name": "an empty root list is an error", "rule": {"name": "r", "subjects": {"all": true}, "must_be_reachable_from": {"roots": []}}, "expect": {"errors": [{"code": "empty-list", "role": "root"}]}},
+    {"name": "each root pattern must match a unit", "rule": {"name": "r", "subjects": {"all": true}, "must_be_reachable_from": {"roots": ["crate", "crate::nothing"]}}, "expect": {"errors": [{"code": "pattern-matches-nothing", "role": "root", "value": "crate::nothing"}]}},
+    {"name": "an invalid root pattern is an error", "rule": {"name": "r", "subjects": {"all": true}, "must_be_reachable_from": {"roots": [["a**"]]}}, "expect": {"errors": [{"code": "invalid-pattern", "role": "root", "value": "a**"}]}},
+    {"name": "a baseline accepts unreachable units", "rule": {"name": "r", "subjects": {"all": true}, "must_be_reachable_from": {"roots": ["crate", "crate::tools::cli"]}}, "expect": {"violations": [{"unit": "crate::island", "detail": "unreachable", "line": 0, "column": 0, "file": "src/island/mod.rs"}, {"unit": "crate::island::part", "detail": "unreachable", "line": 0, "column": 0, "file": "src/island/part.rs"}]}, "baseline": "r\tcrate::dead\tunreachable\t1\nr\tcrate::dead::inner\tunreachable\t1\n"}
+  ]
+}
