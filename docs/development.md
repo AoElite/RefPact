@@ -90,7 +90,8 @@ ways:
   `major`, or an exact `X.Y.Z`), commit, and push the tag `vX.Y.Z`. The workflow checks that
   the tag matches the files, runs the tests, and publishes.
 
-The version is in `Cargo.toml`, `Cargo.lock` and `packages/refpact/package.json`.
+The version is in `Cargo.toml`, `Cargo.lock`, `packages/refpact/package.json` and the exact
+version of `refpact-core` that `crates/refpact/Cargo.toml` requires.
 `cargo xtask bump` changes all of them; `cargo xtask bump current` prints it and fails
 when they disagree.
 
@@ -111,6 +112,19 @@ not run on the release commit; the release job tests it instead.
 2. Add two secrets to the repository: `CARGO_REGISTRY_TOKEN`, a crates.io token that can
    publish new crates, and `NPM_TOKEN`, an npm token that can publish to the scope
    `@aoelite`. npm refuses the name `refpact` without a scope, as too similar to `react`.
+
+**After the first release**, npm can trust the workflow, and the token is not needed. A
+package has these settings only when it is published, so the first release needs the token.
+
+1. On npm, in the settings of the package, add a trusted publisher: GitHub Actions, this
+   repository, the workflow `release.yml`, no environment, with `npm publish` allowed.
+2. Remove the secret `NPM_TOKEN`. While it is there, npm uses it when it cannot publish as
+   a trusted publisher.
+
+The workflow has two jobs. The first tests, publishes the crates and makes the file of the
+npm package. The second publishes that file, and only it can ask for the token that npm
+trusts: it checks out no code and installs nothing, so no code of a dependency runs with
+that permission.
 
 ## Documentation
 

@@ -90,6 +90,108 @@ impl ItemCheck for Selection {
     }
 }
 
+/// The check of `graph`: a graph of what a rule sees, as JSON text, so that a binding has
+/// the edges and the tangles of the core. A binding asks for it only when its check uses
+/// the graph.
+pub(super) struct GraphAnswer {
+    /// The graph of the subjects (SPEC 4.5), and not the unit graph (SPEC 4.8).
+    subjects: bool,
+    /// The tangles of the graph, and not its edges: a check that does not use the tangles
+    /// does not pay for their search.
+    tangles: bool,
+    answer: RefCell<String>,
+}
+
+impl GraphAnswer {
+    pub(super) fn new(subjects: bool, tangles: bool) -> GraphAnswer {
+        GraphAnswer {
+            subjects,
+            tangles,
+            answer: RefCell::new(String::new()),
+        }
+    }
+
+    /// The answer, after the evaluation.
+    pub(super) fn answer(&self) -> String {
+        self.answer.take()
+    }
+}
+
+impl Check for GraphAnswer {
+    fn prepare<'c>(&'c self, _: &mut Setup<'_>) -> Box<dyn Checker + 'c> {
+        Box::new(move |scope: &Scope<'_>| -> Vec<Violation> {
+            *self.answer.borrow_mut() = graph_text(scope, self.subjects, self.tangles);
+            Vec::new()
+        })
+    }
+}
+
+/// `{ ok: true, nodes, edges }`, or with `tangles` `{ ok: true, tangles }`. `nodes` has the
+/// unit of each node of the graph of the subjects; a node of the unit graph is its unit, so
+/// that graph has no `nodes`. An edge is `[to, fact, path]`, with the place of its path in
+/// the paths of the fact.
+fn graph_text(scope: &Scope, subjects: bool, tangles: bool) -> String {
+    let graph = if subjects {
+        scope.graph(None)
+    } else {
+        scope.unit_graph()
+    };
+    let mut text = String::from(r#"{"ok":true,"#);
+    if tangles {
+        text.push_str(r#""tangles":["#);
+        for (index, tangle) in graph.tangles().iter().enumerate() {
+            if index > 0 {
+                text.push(',');
+            }
+            text.push_str(r#"{"members":["#);
+            numbers(&mut text, tangle.members.iter().copied());
+            text.push_str(r#"],"cycle":["#);
+            for (number, (node, edge)) in tangle.cycle.iter().enumerate() {
+                if number > 0 {
+                    text.push(',');
+                }
+                let _ = write!(text, "[{node},{edge}]");
+            }
+            text.push_str("]}");
+        }
+        text.push_str("]}");
+        return text;
+    }
+    if subjects {
+        text.push_str(r#""nodes":["#);
+        let units = (0..graph.len()).map(|node| {
+            scope
+                .unit(graph.node(node))
+                .expect("a node of the graph of the subjects is a unit")
+        });
+        numbers(&mut text, units);
+        text.push_str("],");
+    }
+    text.push_str(r#""edges":["#);
+    for node in 0..graph.len() {
+        if node > 0 {
+            text.push(',');
+        }
+        text.push('[');
+        for (number, edge) in graph.edges(node).iter().enumerate() {
+            if number > 0 {
+                text.push(',');
+            }
+            let crate::What::Reference(reference) = &graph.fact(node, number).what else {
+                unreachable!("an edge comes from a reference")
+            };
+            let path = reference
+                .paths()
+                .position(|path| std::ptr::eq(path, edge.target))
+                .expect("the path of an edge is a path of its reference");
+            let _ = write!(text, "[{},{},{path}]", edge.to, edge.fact);
+        }
+        text.push(']');
+    }
+    text.push_str("]}");
+    text
+}
+
 /// Numbers with commas between them.
 fn numbers(text: &mut String, items: impl Iterator<Item = usize>) {
     for (index, item) in items.enumerate() {

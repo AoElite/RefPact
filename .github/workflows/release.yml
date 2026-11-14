@@ -28,6 +28,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   PACKAGE: "@aoelite/refpact-ts"
+  # Both jobs take the same Node.js, so that the npm that is checked is the npm that publishes.
+  NODE_VERSION: 24
 
 jobs:
   release:
@@ -47,7 +49,7 @@ jobs:
           version: 12.16.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
@@ -59,6 +61,14 @@ jobs:
           # The tests of `resolve_calls` run rust-analyzer.
           components: rust-analyzer
       - uses: Swatinem/rust-cache@v2
+
+      # Before anything is published: a release with the crates and without the package is
+      # half a release. npm can publish as a trusted publisher from version 11.5.1.
+      - name: Check the version of npm
+        run: |
+          version="$(npm --version)"
+          printf '%s\n' 11.5.1 "$version" | sort --version-sort --check=quiet \
+            || { echo "::error::npm $version is older than 11.5.1"; exit 1; }
 
       - name: Choose the version
         id: plan
@@ -112,7 +122,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if [ "$MODE" = bump ]; then
-            git add Cargo.toml Cargo.lock packages/refpact/package.json
+            git add Cargo.toml Cargo.lock packages/refpact/package.json crates/refpact/Cargo.toml
             git commit --message "Release v$VERSION"
             git tag --annotate "v$VERSION" --message "v$VERSION"
             git push --atomic origin HEAD:main "v$VERSION"
@@ -141,13 +151,42 @@ jobs:
             esac
           done
 
-      - name: Publish the TypeScript package
+      # This job runs the code of the dependencies, so it cannot publish to npm: it makes
+      # the file of the package, and the next job publishes that file.
+      - name: Pack the TypeScript package
         working-directory: packages/refpact
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           pnpm build
           npm pkg delete private
           # LICENSE is a link to the one at the root, and npm does not follow links.
           cp --remove-destination ../../LICENSE LICENSE
-          npm publish --access public
+          mkdir "$RUNNER_TEMP/package"
+          npm pack --pack-destination "$RUNNER_TEMP/package"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: ${{ runner.temp }}/package/*.tgz
+          if-no-files-found: error
+
+  # Only this job can ask for the token that npm trusts (docs/development.md). It checks out
+  # no code and installs nothing, so no code of a dependency runs with that permission.
+  publish-package:
+    name: Publish the TypeScript package
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v8
+        with:
+          name: package
+      - name: Publish the TypeScript package
+        env:
+          # Not needed when npm trusts this workflow. npm uses it when it cannot publish as a
+          # trusted publisher, and the first release of a package needs it.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish ./*.tgz --access public --ignore-scripts

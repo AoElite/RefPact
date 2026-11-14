@@ -103,21 +103,21 @@ pub fn render_violation(violation: &Violation, format: &PathFormat) -> String {
         }
         Detail::Contains { marker } => {
             line.push_str(&format!("contains {marker}"));
-            if let Some(note) = &violation.note {
-                line.push_str(&format!(" ({note})"));
-            }
+            push_note(&mut line, violation);
         }
         Detail::Custom { message, .. } => {
             line.push_str(message);
-            if let Some(note) = &violation.note {
-                line.push_str(&format!(" ({note})"));
-            }
+            push_note(&mut line, violation);
         }
         Detail::Cycle { steps, size } => {
             line.push_str(&format!(
-                "is in a cycle of {} (the tangle has {size} in all):",
+                "is in a cycle of {} (the tangle has {size} in all",
                 steps.len()
             ));
+            if let Some(note) = &violation.note {
+                line.push_str(&format!(", {note}"));
+            }
+            line.push_str("):");
             for step in steps {
                 line.push_str("\n      ");
                 line.push_str(&render_step(step, format));
@@ -125,7 +125,10 @@ pub fn render_violation(violation: &Violation, format: &PathFormat) -> String {
         }
         Detail::Unused => line.push_str("is not used from outside"),
         Detail::Unreachable => line.push_str("cannot be reached from the roots"),
-        Detail::Outside => line.push_str("is in none of the places of the rule"),
+        Detail::Outside => {
+            line.push_str("is in none of the places of the rule");
+            push_note(&mut line, violation);
+        }
         Detail::Item { item, kind } => {
             line.push_str(&format!("declares {kind} {}", format.print(item)))
         }
@@ -163,6 +166,13 @@ pub fn render_violation(violation: &Violation, format: &PathFormat) -> String {
         }
     }
     line
+}
+
+/// The note of a violation after its text: ` (<note>)`.
+fn push_note(line: &mut String, violation: &Violation) {
+    if let Some(note) = &violation.note {
+        line.push_str(&format!(" ({note})"));
+    }
 }
 
 fn render_step(step: &Step, format: &PathFormat) -> String {

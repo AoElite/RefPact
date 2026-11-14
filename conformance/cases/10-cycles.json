@@ -7,7 +7,7 @@
     "tags": ["test"],
     "facts": [
       {"unit": "a.ts", "file": "a.ts", "line": 1, "reference": {"target": "b.ts/#f", "kind": "import"}},
-      {"unit": "a.ts", "file": "a.ts", "line": 2, "reference": {"target": "c.ts/#g", "kind": "import"}},
+      {"unit": "a.ts", "file": "a.ts", "line": 2, "note": "in the expansion of `m`", "reference": {"target": "c.ts/#g", "kind": "import"}},
       {"unit": "b.ts", "file": "b.ts", "line": 1, "reference": {"target": "c.ts/#g", "kind": "import"}},
       {"unit": "c.ts", "file": "c.ts", "line": 1, "reference": {"target": "a.ts/#h", "kind": "import"}},
       {"unit": "c.ts", "file": "c.ts", "line": 2, "reference": {"target": "d.ts/#T", "kind": "import-type"}},
@@ -25,7 +25,7 @@
     ]
   },
   "cases": [
-    {"name": "a tangle gives one violation with a shortest cycle through its first unit", "rule": {"name": "r", "subjects": {"any_of": ["*.ts"]}, "must_be_acyclic": {}}, "expect": {"violations": [{"unit": "a.ts", "file": "a.ts", "line": 2, "size": 4, "cycle": [{"from": "a.ts", "to": "c.ts", "file": "a.ts", "line": 2, "target": "c.ts/#g", "kind": "import"}, {"from": "c.ts", "to": "a.ts", "file": "c.ts", "line": 1, "target": "a.ts/#h"}]}]}},
+    {"name": "a tangle gives one violation with a shortest cycle through its first unit", "rule": {"name": "r", "subjects": {"any_of": ["*.ts"]}, "must_be_acyclic": {}}, "expect": {"violations": [{"note": null, "unit": "a.ts", "file": "a.ts", "line": 2, "size": 4, "cycle": [{"from": "a.ts", "to": "c.ts", "file": "a.ts", "line": 2, "target": "c.ts/#g", "kind": "import"}, {"from": "c.ts", "to": "a.ts", "file": "c.ts", "line": 1, "target": "a.ts/#h"}]}]}},
     {"name": "a kind that is left out gives no edge", "rule": {"name": "r", "subjects": {"any_of": ["*.ts"]}, "must_be_acyclic": {}, "kinds": {"except": ["import-type"]}}, "expect": {"violations": [{"unit": "a.ts", "size": 3, "cycle": [{"from": "a.ts", "to": "c.ts", "file": "a.ts", "line": 2, "target": "c.ts/#g", "kind": "import"}, {"from": "c.ts", "to": "a.ts", "file": "c.ts", "line": 1, "target": "a.ts/#h"}]}]}},
     {"name": "a unit that is not selected is not in the graph", "rule": {"name": "r", "subjects": {"any_of": ["a.ts", "b.ts", "d.ts", "e.ts"]}, "must_be_acyclic": {}}, "expect": {"violations": []}},
     {"name": "each tangle gives a violation, in the order of the units", "rule": {"name": "r", "subjects": {"all": true}, "must_be_acyclic": {}}, "expect": {"violations": [{"unit": "a.ts", "size": 4}, {"unit": "features/x/one.ts", "file": "features/x/one.ts", "line": 1, "size": 5, "cycle": [{"from": "features/x/one.ts", "to": "features/x/two.ts"}, {"from": "features/x/two.ts", "to": "features/y/one.ts", "line": 1}, {"from": "features/y/one.ts", "to": "features/x/one.ts", "line": 1}]}, {"unit": "g/one.ts", "size": 2}]}},

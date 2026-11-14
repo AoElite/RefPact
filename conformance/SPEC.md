@@ -261,7 +261,8 @@ that edge, and that edge. It is a shortest cycle through the start node.
 The violation has:
 
 - `unit`: the path of the start node;
-- `file`, `line`, `column`, `note`: those of the witness of the first step;
+- `file`, `line`, `column`: those of the witness of the first step. The violation has no
+  `note`: the note of a witness is about one reference, not about the tangle;
 - `cycle`: one step for each edge of the cycle, in order. A step has `from`, `to` (node
   paths), `file`, `line`, `column`, `target` (the path `P`) and `kind`, from the witness;
 - `size`: the number of nodes in the tangle.
@@ -348,6 +349,11 @@ are as in section 4.7.
 Each selected unit that no pattern of `places` matches exactly gives one violation. Its fields
 are as in section 4.7. A binding uses this rule to demand that every unit is in one of a set
 of places, such as the layers of an architecture.
+
+When a pattern of `places` matches a unit of the fact set whose path is a proper start of
+the path of the unit, and no pattern of `places` matches a unit below that one, the
+violation has the `note` ``a place matches a unit above it: a pattern that ends in
+`**` also matches the units below``. A report prints it as ` (<note>)`.
 
 ### 4.11 `must_only_be_used_by`
 
@@ -771,7 +777,8 @@ Each file in `cases/` is one object:
     every key that the expectation gives must be equal: `unit`, `file`, `line`, `column`,
     `target`, `written`, `kind`, `certainty`, `marker`, `note`, `cycle`, `size`, `chain`,
     `end`, `detail`, `item`, `item_kind`, `lines`, `limit`.
-    `"written": null` means that the violation has no `written`. `cycle` and `chain` are
+    `"written": null` means that the violation has no `written`, and `"note": null` that it
+    has no `note`. `cycle` and `chain` are
     lists of steps; the number of steps must be equal, and in each step every given key must
     be equal: `from`, `to`, `file`, `line`, `column`, `target`, `kind`. `end` is an object;
     every given key must be equal: `unit`, `file`, `line`, `column`, `target`, `kind`.
@@ -817,7 +824,8 @@ A violation has the key `(rule, unit, what)`:
   - `custom <key>` for a `custom` detail, or `custom <message>` when it has no key. A tab or a
     line break in the text is a space.
 
-For a cycle, the `unit` of the key is that smallest node, not the start node of the search. For a `uses` violation of a demand about uses
+For a cycle, the `unit` of the key is that smallest node, not the start node of the search. A cycle
+without steps, which only a check of the user can give, has the `unit` of the violation. For a `uses` violation of a demand about uses
 (section 4.12), the `unit` of the key is the `item` of the detail, and `what` is
 `uses <kind> <target>`.
 The key has no line number, so it does not change when lines move.
@@ -830,18 +838,29 @@ lines that start with `#` are ignored. A line is invalid when it does not have f
 when a value is empty, or when `count` is not a whole number of 1 or more in decimal digits.
 A rule name that contains a tab or a line break cannot be used with a baseline.
 
-When the core writes a baseline, it writes one entry for each key, with the number of
-violations that have the key, sorted by `rule`, then `unit`, then `what`, as text.
+A violation has a *weight*: the `size` of its tangle for a cycle, or 1 when the size is 0,
+and 1 for every other violation. So an entry of a cycle accepts a tangle of that many nodes,
+and a tangle with more nodes is not accepted, also when its reported cycle stays the same.
+The weight is a number of nodes, not their names: a tangle that loses one node and gains
+another, with the same reported cycle, is accepted.
+
+When the core writes a baseline, it writes one entry for each key, with the sum of the
+weights of the violations that have the key, sorted by `rule`, then `unit`, then `what`, as
+text.
 
 ### 7.3 Applying a baseline to the violations of one rule
 
 Only the entries whose `rule` is equal to the name of the rule count. The *allowance* of a
-key is the sum of `count` of its entries. For each key, let `found` be the number of
-violations with that key.
+key is the sum of `count` of its entries. For each key, let `found` be the sum of the
+weights of the violations with that key.
 
 - `found` is not more than the allowance: these violations are accepted and removed.
 - `found` is more than the allowance: all violations with that key remain. The core cannot
-  tell which of them is new.
+  tell which of them is new. A cycle that remains gets the note `the baseline accepts a
+  tangle of <allowance>`, after its own note and `, ` when it has one. When the allowance
+  is 1 and the `size` of the cycle is 2 or more, the note continues with `: a baseline of a version before
+  0.2.0 has the number of cycles there, write it again`. A report prints the note of a
+  cycle after the size of its tangle: `(the tangle has <size> in all, <note>)`.
 - `found` is less than the allowance: the key is *stale*. The stale entry is
   `{ unit, what, count: the allowance, found }`.
 
@@ -871,12 +890,14 @@ names the handle, so that a large fact set crosses the boundary once and not for
 | `drop-facts` | `handle` | `{}` |
 | `evaluate` | `handle`, `rule` | `{ ok: true, violations }` or `{ ok: false, errors }` |
 | `select` | `handle`, `rule` with a `custom` constraint or a `custom` demand | `{ ok: true, subjects, units, references, markers, declarations, items }` or `{ ok: false, errors }` |
+| `graph` | `handle`, `rule` as for `select`, `subjects`, `tangles` | `{ ok: true, nodes, edges }`, `{ ok: true, tangles }` or `{ ok: false, errors }` |
 | `diagram` | `handle`, `rule`, `slices`, `layers`, `format` | `{ ok: true, text }` or `{ ok: false, errors }` |
 | `print-path` | `path`, `format` | `{ text }` |
 | `render-violation` | `violation`, `format` | `{ text }` |
 | `render-violations` | `rule` (the name), `reason`, `severity`, `violations`, `format` | `{ text }` |
 | `render-error` | `error` | `{ text }` |
 | `render-errors` | `rule` (the name), `errors` | `{ text }` |
+| `render-stale` | `rule` (the name), `file` (the name of the baseline file), `entries` (stale entries) | `{ text }` |
 | `baseline-key` | `violation`, `format` | `{ unit, what }` |
 | `baseline-entries` | `violations`, `format` | `{ entries }` |
 | `apply-baseline` | `rule` (the name), `violations`, `entries`, `format` | `{ remaining, stale }` |
@@ -925,6 +946,21 @@ The answer has what the rule sees, by position in the fact set:
 - `items`: for a rule about items, the selected declarations. Absent for other rules.
 
 The binding finds the violations, and renders and baselines them with the requests below.
+
+`graph` takes the `handle` and the `rule` of a `select`, and answers a graph of the
+references that the rule sees: `{ ok: true, nodes, edges }`, or `{ ok: true, tangles }` when
+`tangles` is `true`, so that the tangles are searched only for a check that uses them. The graph is the unit
+graph (section 4.8), where the node of a unit is its number. When `subjects` is `true`, it
+is the graph of section 4.5 without slices, with one node for each subject. A binding asks
+for a graph only when its check uses it.
+
+- `nodes`: for the graph of the subjects, the unit of each node. Absent for the unit graph.
+- `edges`: for each node, its edges in their order. An edge is `[to, fact, path]`: the node
+  that it leads to, its witness, and the place of the path of the edge in
+  `[target, aliases...]`.
+- `tangles`: `{ members, cycle }` for each tangle of that graph, found as section 4.5 finds
+  them. `members` has the nodes of the tangle in ascending order. `cycle` has the reported
+  cycle: each step is `[node, edge]`, with the place of the edge in the edges of the node.
 
 `diagram` gives the diagram of a rule (section 4.17). The constraint of the rule is not
 read, so it can be a check of the binding. The binding sends the slices of the diagram as

@@ -85,12 +85,10 @@ pub struct Graph<'a> {
 /// Nodes that reach each other, with one of their cycles. See [`Graph::tangles`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tangle {
-    /// The first node of the tangle.
-    pub start: usize,
-    /// The number of nodes of the tangle.
-    pub size: usize,
-    /// A shortest cycle through `start`: each step is a node and the number of the edge of
-    /// that node that the cycle takes.
+    /// The nodes of the tangle, in ascending order.
+    pub members: Vec<usize>,
+    /// A shortest cycle through the first member: each step is a node and the number of the
+    /// edge of that node that the cycle takes.
     pub cycle: Vec<(usize, usize)>,
 }
 
@@ -172,20 +170,22 @@ impl<'a> Graph<'a> {
     /// order of their first nodes (SPEC 4.5).
     pub fn tangles(&self) -> Vec<Tangle> {
         let components = components(&self.edges);
-        let mut sizes = vec![0usize; self.len()];
-        for &component in &components {
-            sizes[component] += 1;
+        let mut members: Vec<Vec<usize>> = vec![Vec::new(); self.len()];
+        for (node, &component) in components.iter().enumerate() {
+            members[component].push(node);
         }
-        let mut reported = vec![false; self.len()];
         let mut tangles = Vec::new();
         for start in 0..self.len() {
-            // A tangle is reported at its first node.
-            let size = sizes[components[start]];
-            if size < 2 || std::mem::replace(&mut reported[components[start]], true) {
+            // A tangle is reported at its first node: after that, its list is empty.
+            let members = &mut members[components[start]];
+            if members.len() < 2 {
                 continue;
             }
             let cycle = shortest_cycle(start, &self.edges, &components);
-            tangles.push(Tangle { start, size, cycle });
+            tangles.push(Tangle {
+                members: std::mem::take(members),
+                cycle,
+            });
         }
         tangles
     }

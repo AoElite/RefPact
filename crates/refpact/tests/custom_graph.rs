@@ -2,7 +2,7 @@
 //! built-in rules use: each built-in rule here is written again as a check of the user, and
 //! must give the same violations.
 
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock, Mutex};
 
 use refpact::core::{Constraint, End, RawPattern, Targets};
 use refpact::{
@@ -66,11 +66,12 @@ impl Check for Acyclic {
                         .collect();
                     let detail = Detail::Cycle {
                         steps,
-                        size: tangle.size,
+                        size: tangle.members.len(),
                     };
-                    let first = graph.fact(tangle.start, tangle.cycle[0].1);
+                    let first = graph.fact(tangle.members[0], tangle.cycle[0].1);
                     Violation {
-                        unit: graph.node(tangle.start).clone(),
+                        unit: graph.node(tangle.members[0]).clone(),
+                        note: None,
                         ..scope.violation_at(first, detail)
                     }
                 })
@@ -96,6 +97,29 @@ fn the_graph_of_the_subjects_gives_the_cycles_of_the_built_in_rule() {
         panic!("not a cycle")
     };
     assert_eq!((steps.len(), *size), (3, 3));
+
+    // A tangle gives its members: `d` and `e` are in no cycle, and `deep` only uses `c`.
+    let members = Arc::new(Mutex::new(Vec::new()));
+    let found = Arc::clone(&members);
+    rule("the members of each tangle")
+        .modules(all())
+        .must_meet(move |scope: &Scope<'_>| -> Vec<Violation> {
+            let graph = scope.graph(None);
+            for tangle in graph.tangles() {
+                let paths = tangle
+                    .members
+                    .iter()
+                    .map(|&node| graph.node(node).join("::"));
+                found.lock().unwrap().push(paths.collect::<Vec<_>>());
+            }
+            Vec::new()
+        })
+        .evaluate(&APP)
+        .unwrap();
+    assert_eq!(
+        *members.lock().unwrap(),
+        [["crate::a", "crate::b", "crate::c"]]
+    );
 
     // With slices, `crate::a::deep` is in the slice `crate::a`.
     let slices = || any_of(["crate::*"]);

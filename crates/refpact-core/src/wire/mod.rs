@@ -33,8 +33,8 @@ use std::borrow::Cow;
 use json::Value;
 
 use crate::baseline::{
-    apply_baseline, baseline_entries, baseline_key, format_baseline, parse_baseline, BaselineEntry,
-    StaleEntry,
+    apply_baseline, baseline_entries, baseline_key, format_baseline, parse_baseline, render_stale,
+    BaselineEntry, StaleEntry,
 };
 use crate::diagram::{DiagramFormat, DiagramLayer, DiagramNodes};
 use crate::error::{ErrorCode, Role, RuleError};
@@ -109,11 +109,25 @@ impl Session {
                         ("violations", list_of(&violations, violation_value)),
                     ])
                     .to_text(),
-                    Err(errors) => object([
-                        ("ok", Value::Bool(false)),
-                        ("errors", list_of(&errors, error_value)),
-                    ])
-                    .to_text(),
+                    Err(errors) => errors_answer(&errors),
+                }
+            }
+            "graph" => {
+                // Only the filters and the exemptions of the rule decide what the graph has.
+                let rule = get(&request, "rule", |rule| {
+                    rule_with(rule, |_| Ok(Constraint::MustBeUsed))
+                })?;
+                let handle = get(&request, "handle", whole)?;
+                let facts = self
+                    .slot(handle)?
+                    .as_ref()
+                    .ok_or("the fact set was dropped")?;
+                let subjects = optional(&request, "subjects", boolean)?.unwrap_or(false);
+                let tangles = optional(&request, "tangles", boolean)?.unwrap_or(false);
+                let graph = select::GraphAnswer::new(subjects, tangles);
+                match facts.evaluate_check(&rule, &graph) {
+                    Ok(_) => graph.answer(),
+                    Err(errors) => errors_answer(&errors),
                 }
             }
             "select" => {
@@ -129,11 +143,7 @@ impl Session {
                     .ok_or("the fact set was dropped")?;
                 match facts.evaluate_check(&rule, &selection) {
                     Ok(_) => selection.answer(),
-                    Err(errors) => object([
-                        ("ok", Value::Bool(false)),
-                        ("errors", list_of(&errors, error_value)),
-                    ])
-                    .to_text(),
+                    Err(errors) => errors_answer(&errors),
                 }
             }
             "diagram" => {
@@ -163,11 +173,7 @@ impl Session {
                         ("text", Value::String(Cow::Owned(diagram))),
                     ])
                     .to_text(),
-                    Err(errors) => object([
-                        ("ok", Value::Bool(false)),
-                        ("errors", list_of(&errors, error_value)),
-                    ])
-                    .to_text(),
+                    Err(errors) => errors_answer(&errors),
                 }
             }
             "print-path" => {
@@ -200,6 +206,12 @@ impl Session {
                 let rule = get(&request, "rule", string)?;
                 let errors = get(&request, "errors", |value| list(value, rule_error))?;
                 text(render_errors(&rule, &errors)).to_text()
+            }
+            "render-stale" => {
+                let rule = get(&request, "rule", string)?;
+                let file = get(&request, "file", string)?;
+                let entries = get(&request, "entries", |value| list(value, stale))?;
+                text(render_stale(&rule, &file, &entries)).to_text()
             }
             "baseline-key" => {
                 let violation = get(&request, "violation", violation)?;
@@ -328,6 +340,13 @@ fn strings(value: &Value) -> Read<Vec<String>> {
 
 fn paths(value: &Value) -> Read<Vec<Path>> {
     list(value, strings)
+}
+
+fn boolean(value: &Value) -> Read<bool> {
+    match value {
+        Value::Bool(value) => Ok(*value),
+        _ => Err("expected true or false".to_owned()),
+    }
 }
 
 fn whole(value: &Value) -> Read<u32> {
@@ -635,6 +654,15 @@ fn entry(value: &Value) -> Read<BaselineEntry> {
     })
 }
 
+fn stale(value: &Value) -> Read<StaleEntry> {
+    Ok(StaleEntry {
+        unit: get(value, "unit", string)?,
+        what: get(value, "what", string)?,
+        count: get(value, "count", whole)?,
+        found: get(value, "found", whole)?,
+    })
+}
+
 // Writing. The shapes are those that the readers above read.
 
 fn object<'a, const N: usize>(fields: [(&'static str, Value<'a>); N]) -> Value<'a> {
@@ -771,6 +799,15 @@ fn violation_value(violation: &Violation) -> Value<'_> {
     }
     fields.push((Cow::Borrowed("detail"), detail));
     Value::Object(fields)
+}
+
+/// The answer of a request about a rule that cannot be evaluated: `{ ok: false, errors }`.
+fn errors_answer(errors: &[RuleError]) -> String {
+    object([
+        ("ok", Value::Bool(false)),
+        ("errors", list_of(errors, error_value)),
+    ])
+    .to_text()
 }
 
 fn error_value(error: &RuleError) -> Value<'_> {
@@ -983,6 +1020,69 @@ mod tests {
         assert_eq!(
             filtered.to_text(),
             r#"{"ok":true,"subjects":[0,1],"units":[],"references":[],"markers":[1],"declarations":[]}"#
+        );
+        // `graph` answers the edges and the tangles of the unit graph. A reference through a
+        // re-export gives an edge for each of its paths, and an edge names its path.
+        let cycle = r#"{"separator": "/", "units": [["a"], ["b"], ["c"]],
+            "items": [["b", "@x"], ["c", "@y"], ["a", "@z"]], "kinds": ["import"], "markers": [], "tags": [],
+            "attachedPrefixes": ["@"], "facts": [
+            {"unit": ["a"], "file": "a", "line": 1, "column": 1, "what": {"type": "reference",
+             "target": ["b", "@x"], "aliases": [["c", "@y"]], "kind": "import", "certainty": "exact"}},
+            {"unit": ["c"], "file": "c", "line": 1, "column": 1, "what": {"type": "reference",
+             "target": ["a", "@z"], "kind": "import", "certainty": "exact"}}]}"#;
+        let mut tangled = Session::new();
+        tangled
+            .call(&format!(r#"{{"op": "load-facts", "facts": {cycle}}}"#))
+            .unwrap();
+        let all = r#""rule": {"name": "r", "subjects": {"include": {"type": "all"}},
+            "constraint": {"type": "custom"}}"#;
+        let graph = call(
+            &mut tangled,
+            &format!(r#"{{"op": "graph", "handle": 1, {all}}}"#),
+        );
+        assert_eq!(
+            graph.to_text(),
+            r#"{"ok":true,"edges":[[[1,0,0],[2,0,1]],[],[[0,1,0]]]}"#
+        );
+        // The tangles are their own answer, so that only a check that uses them pays for them.
+        let tangles = call(
+            &mut tangled,
+            &format!(r#"{{"op": "graph", "handle": 1, "tangles": true, {all}}}"#),
+        );
+        assert_eq!(
+            tangles.to_text(),
+            r#"{"ok":true,"tangles":[{"members":[0,2],"cycle":[[0,1],[2,0]]}]}"#
+        );
+        // With `subjects`, the graph is that of the subjects: a node is a subject, by `nodes`,
+        // and a cycle through a unit that is no subject is no tangle.
+        let of_subjects = |session: &mut Session, patterns: &str| {
+            let request = format!(
+                r#"{{"op": "graph", "handle": 1, "subjects": true, "tangles": TANGLES, "rule": {{"name": "r",
+                "subjects": {{"include": {{"type": "any-of", "patterns": {patterns}}}}},
+                "constraint": {{"type": "custom"}}}}}}"#
+            );
+            let mut answer =
+                |tangles: &str| call(session, &request.replace("TANGLES", tangles)).to_text();
+            [answer("false"), answer("true")]
+        };
+        assert_eq!(
+            of_subjects(&mut tangled, r#"[["c"], ["a"]]"#),
+            [
+                r#"{"ok":true,"nodes":[0,2],"edges":[[[1,0,1]],[[0,1,0]]]}"#,
+                r#"{"ok":true,"tangles":[{"members":[0,1],"cycle":[[0,0],[1,0]]}]}"#
+            ]
+        );
+        assert_eq!(
+            of_subjects(&mut tangled, r#"[["a"], ["b"]]"#),
+            [
+                r#"{"ok":true,"nodes":[0,1],"edges":[[[1,0,0]],[]]}"#,
+                r#"{"ok":true,"tangles":[]}"#
+            ]
+        );
+        // The errors of the rule are the answer, as for `select`.
+        assert_eq!(
+            of_subjects(&mut tangled, r#"[["nothing"]]"#)[0],
+            r#"{"ok":false,"errors":[{"code":"pattern-matches-nothing","role":"subject","value":"nothing"}]}"#
         );
         // So do the errors of every rule, and of the targets.
         let invalid = call(

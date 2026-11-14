@@ -35,13 +35,15 @@ fn tangles(scope: &Scope, slices: Option<&Slices>) -> Vec<Violation> {
                 .iter()
                 .map(|&(from, edge)| graph.step(from, edge))
                 .collect();
-            let witness = graph.fact(tangle.start, tangle.cycle[0].1);
+            let witness = graph.fact(tangle.members[0], tangle.cycle[0].1);
             let detail = Detail::Cycle {
                 steps,
-                size: tangle.size,
+                size: tangle.members.len(),
             };
             Violation {
-                unit: graph.node(tangle.start).clone(),
+                unit: graph.node(tangle.members[0]).clone(),
+                // The note of the witness is about one reference, not about the tangle.
+                note: None,
                 ..scope.violation_at(witness, detail)
             }
         })

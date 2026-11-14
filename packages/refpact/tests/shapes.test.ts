@@ -247,12 +247,21 @@ it("baselines", () => {
     const acyclic = rule("no cycles").files(anyOf("src/rings/**")).mustBeAcyclic();
     noDb().writeBaseline(planted, baseline(file));
     acyclic.writeBaseline(planted, baseline(file));
-    const cycleLine = "no cycles\tsrc/rings/alpha.ts\tcycle src/rings/alpha.ts > src/rings/beta.ts > src/rings/gamma.ts\t1\n";
+    const cycleLine = "no cycles\tsrc/rings/alpha.ts\tcycle src/rings/alpha.ts > src/rings/beta.ts > src/rings/gamma.ts\t3\n";
     expect(readFileSync(file, "utf8")).toBe(HEADER + cycleLine + DB_LINE);
     noDb().writeBaseline(planted, baseline(file));
     expect(readFileSync(file, "utf8")).toBe(HEADER + cycleLine + DB_LINE);
     acyclic.checkWithBaseline(planted, baseline(file));
     noDb().checkWithBaseline(planted, baseline(file));
+
+    // The count of a cycle is the size of its tangle. A baseline of a version before 0.2.0
+    // has 1 there: the report says so. A count that is too large is a stale entry.
+    writeFileSync(file, cycleLine.replace(/3\n$/, "1\n"));
+    expect(acyclic.verifyWithBaseline(planted, baseline(file))?.message).toContain(
+      "(the tangle has 3 in all, the baseline accepts a tangle of 1: a baseline of a version before 0.2.0 has the number of cycles there, write it again):",
+    );
+    writeFileSync(file, cycleLine.replace(/3\n$/, "4\n"));
+    expect(acyclic.verifyWithBaseline(planted, baseline(file))?.message).toContain("(the baseline accepts a tangle of 4, the code has a tangle of 3)");
   }
 
   // writing a rule without violations removes its entries

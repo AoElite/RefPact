@@ -299,9 +299,31 @@ fn baseline_files() {
         .write_baseline(&PLANTED, &scratch.baseline())
         .unwrap();
     let cycle_line =
-        "no cycles\tcrate::rings::alpha\tcycle crate::rings::alpha > crate::rings::beta > crate::rings::gamma\t1\n";
+        "no cycles\tcrate::rings::alpha\tcycle crate::rings::alpha > crate::rings::beta > crate::rings::gamma\t3\n";
     assert_eq!(scratch.text(), format!("{HEADER}{cycle_line}{LEAF_LINES}"));
     no_cycles.check_with_baseline(&PLANTED, &scratch.baseline());
+
+    // The count of a cycle is the size of its tangle. A baseline of a version before 0.2.0
+    // has 1 there: the report says so. A count that is too large is a stale entry.
+    let cycle_key = cycle_line.trim_end_matches("3\n");
+    scratch.set(&format!("{cycle_key}1\n"));
+    let old = no_cycles
+        .verify_with_baseline(&PLANTED, &scratch.baseline())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        old.contains("(the tangle has 3 in all, the baseline accepts a tangle of 1: a baseline of a version before 0.2.0 has the number of cycles there, write it again):"),
+        "{old}"
+    );
+    scratch.set(&format!("{cycle_key}4\n"));
+    let stale = no_cycles
+        .verify_with_baseline(&PLANTED, &scratch.baseline())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        stale.contains("(the baseline accepts a tangle of 4, the code has a tangle of 3)"),
+        "{stale}"
+    );
 
     scratch.set(
         "strict does not use leaf\tcrate::rings::strict\tuses use crate::rings::leaf::Leaf\t1\n",
@@ -334,7 +356,7 @@ fn baseline_files() {
         other => panic!("{other:?}"),
     }
     let text = failure.to_string();
-    assert!(text.contains("accepts violations that are gone"), "{text}");
+    assert!(text.contains("accepts more than the code has"), "{text}");
     assert!(
         text.contains(
             "uses expr crate::rings::leaf::Leaf (the baseline accepts 2, the code has 0)"

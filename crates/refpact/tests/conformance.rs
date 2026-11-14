@@ -24,7 +24,7 @@ use refpact::core::{
 use serde_json::{json, Value};
 
 /// The number of cases the directory holds. A harness that runs fewer cases must fail.
-const EXPECTED_CASES: usize = 293;
+const EXPECTED_CASES: usize = 298;
 
 /// The case files in the order of their names: the file name and the content.
 fn case_files() -> Vec<(String, Value)> {

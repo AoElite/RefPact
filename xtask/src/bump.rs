@@ -7,9 +7,11 @@
 //! cargo xtask bump 1.2.3                an exact version
 //! ```
 //!
-//! The version is in three files: `version` of `[workspace.package]` in `Cargo.toml`, the
-//! entry of the crate in `Cargo.lock`, and `version` in `packages/refpact/package.json`. The
-//! task edits the text of each and keeps the rest as it is. It prints the new version.
+//! The version is in four files: `version` of `[workspace.package]` in `Cargo.toml`, the
+//! entry of each crate in `Cargo.lock`, `version` in `packages/refpact/package.json`, and the
+//! version of the core that `crates/refpact/Cargo.toml` requires. That requirement is exact:
+//! the crate and its core are released together, so an update of the crate brings its core.
+//! The task edits the text of each and keeps the rest as it is. It prints the new version.
 
 use std::cmp::Reverse;
 use std::fs;
@@ -17,8 +19,16 @@ use std::fs;
 use crate::root;
 
 pub const USAGE: &str = "cargo xtask bump current|patch|minor|major|X.Y.Z";
-const FILES: [&str; 3] = ["Cargo.toml", "Cargo.lock", "packages/refpact/package.json"];
-const CRATE: &str = "refpact";
+const FILES: [&str; 4] = [
+    "Cargo.toml",
+    "Cargo.lock",
+    "packages/refpact/package.json",
+    "crates/refpact/Cargo.toml",
+];
+const CRATES: [&str; 3] = ["refpact", "refpact-core", "refpact-wasm"];
+/// The start of the line of the core in the dependencies of the crate, and the start of its
+/// exact requirement in that line. The rest of the line can change.
+const CORE: [&str; 2] = ["\nrefpact-core = ", "version = \"="];
 
 /// A version in the text of one of `FILES`.
 struct Place {
@@ -92,26 +102,32 @@ fn places(texts: &[String]) -> Result<Vec<Place>, String> {
     let section_end = manifest[header + 1..]
         .find("\n[")
         .map_or(manifest.len(), |at| header + 1 + at);
-    let lock_entry = format!("[[package]]\nname = \"{CRATE}\"\nversion = \"");
-    let searches = [
+    let lock_entries = CRATES.map(|name| format!("[[package]]\nname = \"{name}\"\nversion = \""));
+    let mut searches = vec![
         (
+            0,
             "Cargo.toml".to_string(),
             header..section_end,
             "\nversion = \"",
         ),
         (
-            format!("Cargo.lock ({CRATE})"),
-            0..texts[1].len(),
-            &*lock_entry,
-        ),
-        (
+            2,
             "package.json".to_string(),
             0..texts[2].len(),
             "\n  \"version\": \"",
         ),
+        (
+            3,
+            "crates/refpact/Cargo.toml (refpact-core)".to_string(),
+            core_line(&texts[3])?,
+            CORE[1],
+        ),
     ];
+    for (name, entry) in CRATES.iter().zip(&lock_entries) {
+        searches.push((1, format!("Cargo.lock ({name})"), 0..texts[1].len(), entry));
+    }
     let mut places = Vec::new();
-    for (file, (label, range, prefix)) in searches.into_iter().enumerate() {
+    for (file, label, range, prefix) in searches {
         let (start, end) = value_after(&texts[file][range.clone()], prefix)
             .ok_or_else(|| format!("no version in {label}"))?;
         let (start, end) = (range.start + start, range.start + end);
@@ -125,11 +141,26 @@ fn places(texts: &[String]) -> Result<Vec<Place>, String> {
 
     let package: serde_json::Value = serde_json::from_str(&texts[2])
         .map_err(|error| format!("package.json is not JSON: {error}"))?;
-    let json = &places[2];
+    let json = places
+        .iter()
+        .find(|place| place.file == 2)
+        .expect("package.json has a place");
     if package["version"].as_str() != Some(&texts[2][json.start..json.end]) {
         return Err("the version in package.json is not the top-level one".to_string());
     }
     Ok(places)
+}
+
+/// The line of the core in the manifest of the crate.
+fn core_line(manifest: &str) -> Result<std::ops::Range<usize>, String> {
+    let start = manifest
+        .find(CORE[0])
+        .ok_or("no refpact-core in crates/refpact/Cargo.toml")?
+        + 1;
+    let end = manifest[start..]
+        .find('\n')
+        .map_or(manifest.len(), |at| start + at);
+    Ok(start..end)
 }
 
 /// The start and end of the string value that follows the first `prefix` in `text`.
@@ -159,7 +190,35 @@ fn parse(version: &str) -> Option<[u64; 3]> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse;
+    use super::{core_line, parse, run, value_after, CORE};
+
+    // The crate requires exactly its own version of the core, and every entry of the lock
+    // has it: a release of the crate with an older requirement keeps an old, locked core.
+    #[test]
+    fn the_versions_of_the_repository_agree() {
+        run(&["current".to_string()]).unwrap();
+    }
+
+    // The requirement is found in any form of the line of the core, and not in another line.
+    #[test]
+    fn the_requirement_of_the_core_is_found_in_its_line() {
+        let found = |manifest: &str| {
+            let line = &manifest[core_line(manifest).ok()?];
+            value_after(line, CORE[1]).map(|(start, end)| line[start..end].to_string())
+        };
+        let forms = [
+            "[dependencies]\nrefpact-core = { path = \"../refpact-core\", version = \"=1.2.3\" }\n",
+            "[dependencies]\nother = { version = \"=9.9.9\" }\nrefpact-core = { version = \"=1.2.3\", default-features = false, path = \"../refpact-core\" }",
+        ];
+        for manifest in forms {
+            assert_eq!(found(manifest).as_deref(), Some("1.2.3"), "{manifest}");
+        }
+        assert_eq!(found("[dependencies]\nrefpact-core = { path = \"..\" }\nother = { version = \"=9.9.9\" }\n"), None);
+        assert_eq!(
+            found("[dependencies]\nother = { version = \"=9.9.9\" }\n"),
+            None
+        );
+    }
 
     #[test]
     fn versions() {

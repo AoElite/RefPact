@@ -39,8 +39,8 @@ mod violation;
 pub mod wire;
 
 pub use baseline::{
-    apply_baseline, baseline_entries, baseline_key, format_baseline, parse_baseline, Applied,
-    BaselineEntry, BaselineError, StaleEntry,
+    apply_baseline, baseline_entries, baseline_key, format_baseline, parse_baseline, render_stale,
+    Applied, BaselineEntry, BaselineError, StaleEntry,
 };
 pub use check::{Check, Checker, Custom, NoReferences, Scope, Seen, SeenMarker, Setup};
 pub use diagram::{DiagramFormat, DiagramLayer, DiagramNodes};

@@ -1,5 +1,5 @@
 /** Checks of the user: what a rule sees, and how its violations are made (SPEC 4.15). */
-import type { Declaration, Detail, Fact, FactSet, Path, Reference, SelectResult, Step, Violation } from "./core/index.ts";
+import type { Declaration, Detail, Fact, FactSet, Path, Reference, GraphResult, SelectResult, Step, TanglesResult, Violation } from "./core/index.ts";
 
 /** An import that the rule sees: the filters and the exemptions of the rule let it pass. */
 export interface SeenImport {
@@ -47,6 +47,14 @@ interface NumberedEdge extends ImportEdge {
   readonly node: number;
 }
 
+/** Files that all reach each other by imports, with one of their cycles: see {@link Graph.tangles}. */
+export interface Tangle {
+  /** The files of the tangle, in the order of the files of the project. */
+  readonly members: readonly Path[];
+  /** A shortest cycle through the first member. The last step leads back to it. */
+  readonly cycle: readonly Step[];
+}
+
 /** The names of the lists of patterns of a check, in the order of the lists in the request. @internal */
 export interface ListNames {
   readonly targets: readonly string[];
@@ -54,6 +62,14 @@ export interface ListNames {
 }
 
 type Selection = Extract<SelectResult, { ok: true }>;
+/** A graph of the core. With `subjects`, it is the graph of the selected files. @internal */
+export type CoreGraph = Extract<GraphResult, { ok: true }>;
+type CoreTangles = Extract<TanglesResult, { ok: true }>["tangles"];
+/** Asks the core for a graph or for its tangles. The core makes each only for a check that uses it. @internal */
+export interface CoreGraphs {
+  readonly graph: (subjects: boolean) => CoreGraph;
+  readonly tangles: (subjects: boolean) => CoreTangles;
+}
 
 /**
  * What a check of the user gets: the files that the rule selects and what the rule sees. The
@@ -77,13 +93,15 @@ export class Scope {
   private readonly selected: ReadonlySet<string>;
   private readonly lists: ReadonlyMap<string, readonly Path[]>;
   private firstFiles: Map<string, string> | undefined;
-  private made: Graph | undefined;
+  private readonly core: CoreGraphs;
+  private readonly made: { all?: Graph; subjects?: Graph } = {};
 
   /** @internal */
-  constructor(ruleName: string, facts: FactSet, selection: Selection, names: ListNames) {
+  constructor(ruleName: string, facts: FactSet, selection: Selection, names: ListNames, core: CoreGraphs) {
     this.ruleName = ruleName;
     this.facts = facts;
     this.selection = selection;
+    this.core = core;
     const units = facts.units;
     this.subjects = selection.subjects.map((unit) => units[unit] as Path);
     this.selected = new Set(this.subjects.map(key));
@@ -140,8 +158,18 @@ export class Scope {
    * barrel and to the file that declares the name. An import of the own file is no edge.
    */
   graph(): Graph {
-    this.made ??= new Graph(this.facts, this.selection);
-    return this.made;
+    this.made.all ??= new Graph(this.facts, this.core.graph(false), () => this.core.tangles(false));
+    return this.made.all;
+  }
+
+  /**
+   * The graph of the selected files only, from the imports that the rule sees: the graph
+   * whose tangles `mustBeAcyclic` reports. An import of a file that the rule does not select
+   * is no edge, so a cycle through such a file is no tangle.
+   */
+  subjectGraph(): Graph {
+    this.made.subjects ??= new Graph(this.facts, this.core.graph(true), () => this.core.tangles(true));
+    return this.made.subjects;
   }
 
   /**
@@ -195,51 +223,68 @@ export class ItemScope extends Scope {
   readonly itemImports: readonly SeenImport[];
 
   /** @internal */
-  constructor(ruleName: string, facts: FactSet, selection: Selection, names: ListNames) {
-    super(ruleName, facts, selection, names);
+  constructor(ruleName: string, facts: FactSet, selection: Selection, names: ListNames, core: CoreGraphs) {
+    super(ruleName, facts, selection, names, core);
     const declarations = facts.declarations ?? [];
     this.items = (selection.items ?? []).map((position) => declarations[position] as Declaration);
     this.itemImports = this.imports.filter((_, index) => selection.references[index]?.inside === true);
   }
 }
 
-/** The graph of the files of a project: see {@link Scope.graph}. */
+/** A graph of files: see {@link Scope.graph} and {@link Scope.subjectGraph}. */
 export class Graph {
+  /** The file of each node. */
   private readonly units: readonly Path[];
   private readonly numbers: Map<string, number>;
   /** For each file, by its number: the edges, each with the number of the file that it leads to. */
   private readonly edges: NumberedEdge[][];
+  /** Asks the core for the tangles, on the first use of them. */
+  private readonly coreTangles: () => CoreTangles;
+  private found: CoreTangles | undefined;
 
   /** @internal */
-  constructor(facts: FactSet, selection: Selection) {
-    this.units = facts.units;
+  constructor(facts: FactSet, graph: CoreGraph, coreTangles: () => CoreTangles) {
+    this.coreTangles = coreTangles;
+    this.units = graph.nodes?.map((unit) => facts.units[unit] as Path) ?? facts.units;
     this.numbers = new Map();
     this.units.forEach((unit, number) => {
       if (!this.numbers.has(key(unit))) {
         this.numbers.set(key(unit), number);
       }
     });
-    this.edges = this.units.map(() => []);
-    const known = new Set<number>();
-    const count = this.units.length;
-    for (const seen of selection.references) {
-      const path = seen.owners.findIndex((owner) => owner !== null);
-      const to = seen.owners[path];
-      if (to === undefined || to === null || to === seen.unit || known.has(seen.unit * count + to)) {
-        continue;
-      }
-      known.add(seen.unit * count + to);
-      const fact = facts.facts[seen.fact] as Fact;
-      const reference = fact.what as Reference;
-      const target = [reference.target, ...reference.aliases][path] as Path;
-      (this.edges[seen.unit] as NumberedEdge[]).push({ to: this.units[to] as Path, node: to, fact, target });
-    }
+    // The core makes the edges, as it does for the built-in rules.
+    this.edges = graph.edges.map((edges) =>
+      edges.map(([to, position, path]) => {
+        const fact = facts.facts[position] as Fact;
+        const reference = fact.what as Reference;
+        return { to: this.units[to] as Path, node: to, fact, target: [reference.target, ...reference.aliases][path] as Path };
+      }),
+    );
   }
 
-  /** The edges of a file, in the order of their first imports. A path that is no file has none. */
+  /** The edges of a file, in the order of their first imports. A path that is no file of the graph has none. */
   edgesOf(file: Path): readonly ImportEdge[] {
     const node = this.numbers.get(key(file));
     return node === undefined ? [] : (this.edges[node] as NumberedEdge[]);
+  }
+
+  /**
+   * The tangles: each group of two or more files that all reach each other, once, in the
+   * order of their first files.
+   */
+  tangles(): Tangle[] {
+    this.found ??= this.coreTangles();
+    return this.found.map(({ members, cycle }) => ({
+      members: members.map((node) => this.units[node] as Path),
+      cycle: cycle.map(([node, edge]) => this.step(node, (this.edges[node] as NumberedEdge[])[edge] as NumberedEdge)),
+    }));
+  }
+
+  /** An edge as the step of a report. */
+  private step(from: number, edge: NumberedEdge): Step {
+    const { fact, target } = edge;
+    const kind = (fact.what as Reference).kind;
+    return { from: this.units[from] as Path, to: this.units[edge.node] as Path, file: fact.file, line: fact.line, column: fact.column, target, kind };
   }
 
   /**
@@ -253,16 +298,14 @@ export class Graph {
       return undefined;
     }
     // For each file that the search found: the file and the edge that led to it.
-    const foundBy = new Map<number, { from: number; edge: ImportEdge }>();
+    const foundBy = new Map<number, { from: number; edge: NumberedEdge }>();
     const queue = [start];
     for (let next = 0; next < queue.length; next++) {
       const node = queue[next] as number;
       if (isEnd(this.units[node] as Path)) {
         const steps: Step[] = [];
         for (let current = node, found = foundBy.get(current); found !== undefined; current = found.from, found = foundBy.get(current)) {
-          const { fact, target } = found.edge;
-          const kind = (fact.what as Reference).kind;
-          steps.push({ from: this.units[found.from] as Path, to: this.units[current] as Path, file: fact.file, line: fact.line, column: fact.column, target, kind });
+          steps.push(this.step(found.from, found.edge));
         }
         return steps.reverse();
       }

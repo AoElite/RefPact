@@ -2,6 +2,7 @@
 // reports and the baselines are those of every rule.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { scratchDirectory } from "./scratch.ts";
 
@@ -156,6 +157,32 @@ it("a check of the user follows the imports in the graph of the files", () => {
     .ignoringTypeImports()
     .check(app);
   expect(withoutTypes).toBe("3");
+  // An import through a barrel file leads to the barrel and to the file that declares the name.
+  const barrels = path.join(directory, "barrels");
+  const sources: Record<string, string> = {
+    "tsconfig.json": files["tsconfig.json"]![0]!,
+    "src/user.ts": 'import { one } from "./lib";\nexport const user = one;\n',
+    "src/lib/index.ts": 'export { one } from "./one";\n',
+    "src/lib/one.ts": 'import type { user } from "../user";\nexport const one = 1;\nexport type User = typeof user;\n',
+    "src/alone.ts": "export const alone = 1;\n",
+  };
+  for (const [name, text] of Object.entries(sources)) {
+    mkdirSync(path.dirname(path.join(barrels, name)), { recursive: true });
+    writeFileSync(path.join(barrels, name), text);
+  }
+  let throughBarrel: string[] = [];
+  let tangles: string[][] = [];
+  rule("probe")
+    .files(all())
+    .mustSatisfy((scope) => {
+      throughBarrel = scope.graph().edgesOf(["src", "user.ts"]).map((edge) => edge.to.join("/"));
+      tangles = scope.graph().tangles().map((tangle) => [tangle.members.map((file) => file.join("/")).join(" "), tangle.cycle.map((step) => `${step.from.join("/")}:${step.line} ${step.kind}`).join(", ")]);
+      return [];
+    })
+    .check(loadProject(path.join(barrels, "tsconfig.json")));
+  expect(throughBarrel).toEqual(["src/lib/index.ts", "src/lib/one.ts"]);
+  // The files that reach each other are one tangle, with a shortest cycle through its first file.
+  expect(tangles).toEqual([["src/lib/index.ts src/lib/one.ts src/user.ts", "src/lib/index.ts:1 export-from, src/lib/one.ts:1 import-type, src/user.ts:1 import"]]);
 });
 
 it("a check of items gets the items that the filters of the rule select", () => {
@@ -311,4 +338,65 @@ it("a check counts the importers of a file and its instability", () => {
   stable(1).check(app);
   // The filters of the rule decide what the graph has.
   stable(0).onlyKinds("import-type").check(app);
+});
+
+// The Rust test `custom_graph.rs` does the same for the graphs of a Rust check.
+it("the graph of a check gives the cycles and the chains of the built-in rules", () => {
+  const planted = loadProject(fileURLToPath(new URL("../../../fixtures/ts/planted/tsconfig.json", import.meta.url)));
+  const self = loadProject(fileURLToPath(new URL("../tsconfig.json", import.meta.url)));
+  const found = (importRule: ImportRule, project: typeof self): unknown[] => {
+    const result = importRule.evaluate(project);
+    if (!result.ok) {
+      throw new Error(JSON.stringify(result.errors));
+    }
+    return result.violations.map(({ unit, detail }) => (detail.type === "cycle" ? { unit, steps: detail.steps, size: detail.size } : detail.type === "reaches" ? { unit, steps: detail.steps } : detail));
+  };
+  for (const filter of [(made: ImportRule) => made, (made: ImportRule) => made.ignoringTypeImports()]) {
+    for (const project of [planted, self]) {
+      const cycles: unknown[] = [];
+      const own = rule("r").files(all()).mustSatisfy((scope) => {
+        cycles.push(...scope.graph().tangles().map((tangle) => ({ unit: tangle.members[0], steps: tangle.cycle, size: tangle.members.length })));
+        return [];
+      });
+      filter(own).check(project);
+      // The planted project has a cycle with and without type imports, so the lists are not empty.
+      expect(project !== planted || cycles.length > 0).toBe(true);
+      expect(cycles).toEqual(found(filter(rule("r").files(all()).mustBeAcyclic()), project));
+    }
+    // The graph of the selected files gives the cycles of the built-in rule for any
+    // selection: without `gamma`, the ring of the planted project is no cycle, though the
+    // graph of all files still has it.
+    for (const selection of [anyOf("src/rings/**"), anyOf("src/rings/alpha.ts", "src/rings/beta.ts")]) {
+      const cycles: unknown[] = [];
+      let all = 0;
+      const own = rule("r").files(selection).mustSatisfy((scope) => {
+        const graph = scope.subjectGraph();
+        expect(scope.subjectGraph()).toBe(graph);
+        cycles.push(...graph.tangles().map((tangle) => ({ unit: tangle.members[0], steps: tangle.cycle, size: tangle.members.length })));
+        expect(graph.edgesOf(["src", "rings", "gamma.ts"]).length > 0).toBe(scope.selects(["src", "rings", "gamma.ts"]));
+        all = scope.graph().tangles().length;
+        return [];
+      });
+      filter(own).check(planted);
+      expect(all).toBeGreaterThan(0);
+      expect(cycles).toEqual(found(filter(rule("r").files(selection).mustBeAcyclic()), planted));
+    }
+    const chains: unknown[] = [];
+    const own = rule("r").files(all()).mustSatisfy(
+      (scope) => {
+        const ends = new Set(scope.imports.filter((seen) => seen.hits["fs"] !== undefined).map((seen) => seen.file.join("/")));
+        for (const file of scope.subjects) {
+          const steps = scope.graph().chain(file, (end) => ends.has(end.join("/")));
+          if (steps !== undefined) {
+            chains.push({ unit: file, steps });
+          }
+        }
+        return [];
+      },
+      { targets: { fs: anyOf(pkg("node:fs")) } },
+    );
+    filter(own).check(self);
+    expect(chains.length).toBeGreaterThan(10);
+    expect(chains).toEqual(found(filter(rule("r").files(all()).mustNotReach(anyOf(pkg("node:fs")))), self));
+  }
 });

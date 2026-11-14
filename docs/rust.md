@@ -286,7 +286,9 @@ layers("the layers of the shop")
 - A layer that these options restrict has a rule with another name: `the layers of the
   shop: jobs uses only the layers it may use`. The rule of `every_module_in_a_layer` is
   `the layers of the shop: every module is in a layer`, and it reports each module that is
-  in no layer.
+  in no layer. A layer pattern matches exactly, so `crate::jobs` does not hold
+  `crate::jobs::mail`. The report says so when a module is below a layer; write
+  `crate::jobs::**`.
 - An option can only narrow the order. A layer named in `may_only_use` that is above the
   layer, or a name that is not a layer, is an error. So is a second list for one layer.
 - `may_only_be_used_by` is about the layers. To keep every other module away as well, use
@@ -850,7 +852,7 @@ their slices from `Setup::slices`.
 | Method of the graph | Gives |
 |---|---|
 | `edges(node)`, `node(node)`, `fact(node, edge)` | the edges of a node, the path of a node, and the first reference that makes an edge |
-| `tangles()` | each group of nodes that reach each other, with a shortest cycle |
+| `tangles()` | each group of nodes that reach each other, with its `members` and a shortest `cycle` through the first of them |
 | `search(is_end).chain(start)` | a shortest chain of edges from a node to the nearest end |
 | `reached_from(is_root)` | the nodes that the roots reach |
 | `step(node, edge)` | an edge as a `Step`, for `Detail::Cycle` and `Detail::Reaches` |
@@ -1379,6 +1381,12 @@ REFPACT_BASELINE=update cargo test    # writes the current violations of these r
   name, module, what, count. A key has no line number, so it does not change when lines move.
   When the code has more violations with one key than the count, all of them are reported,
   because the library cannot tell which one is new.
+- A cycle counts for the number of modules in its tangle. So a tangle with more modules
+  fails, also when the shown cycle is the same, and one with fewer makes its entry stale.
+  The count is a number, not the names: a tangle that loses one module and gains another is
+  accepted when the shown cycle is the same. Before version 0.2.0 a cycle counted 1, so write
+  a baseline of an older version again: until then the cycle fails, and its report says
+  what the baseline accepts.
 - Several rules can share one file. A write replaces the lines of its own rule only. The
   lines of a rule that no test checks any more stay in the file.
 - A file that does not exist is an empty baseline.

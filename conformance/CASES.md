@@ -2054,13 +2054,75 @@ No violation.
 Baseline:
 
 ```text
-no cycles	crate::a	cycle crate::a > crate::c	1
+no cycles	crate::a	cycle crate::a > crate::c	2
 ```
 
 Result:
 
 ```text
 No violation.
+```
+
+### a cycle counts for the nodes of its tangle, so a tangle that grows is not accepted
+
+```json
+{"must_be_acyclic":{},"name":"no cycles","subjects":{"any_of":["crate::c","crate::a","crate::b"]}}
+```
+
+Baseline:
+
+```text
+no cycles	crate::a	cycle crate::a > crate::c	2
+```
+
+Result:
+
+```text
+rule `no cycles` is violated in 1 place(s):
+  crate/c.rs:2:1: [no cycles] crate::c is in a cycle of 2 (the tangle has 3 in all, the baseline accepts a tangle of 2):
+      crate::c -> crate::a  at crate/c.rs:2:1, uses crate::a::Y (use)
+      crate::a -> crate::c  at crate/a.rs:5:1, uses crate::c::Z (use)
+```
+
+### a cycle entry with a count of 1 is from before the count was the size of the tangle, and the note says so
+
+```json
+{"must_be_acyclic":{},"name":"no cycles","subjects":{"any_of":["crate::c","crate::a"]}}
+```
+
+Baseline:
+
+```text
+no cycles	crate::a	cycle crate::a > crate::c	1
+```
+
+Result:
+
+```text
+rule `no cycles` is violated in 1 place(s):
+  crate/c.rs:2:1: [no cycles] crate::c is in a cycle of 2 (the tangle has 2 in all, the baseline accepts a tangle of 1: a baseline of a version before 0.2.0 has the number of cycles there, write it again):
+      crate::c -> crate::a  at crate/c.rs:2:1, uses crate::a::Y (use)
+      crate::a -> crate::c  at crate/a.rs:5:1, uses crate::c::Z (use)
+```
+
+### a tangle that loses a node makes its entry stale
+
+```json
+{"must_be_acyclic":{},"name":"no cycles","subjects":{"any_of":["crate::c","crate::a"]}}
+```
+
+Baseline:
+
+```text
+no cycles	crate::a	cycle crate::a > crate::c	3
+```
+
+Result:
+
+```text
+No violation.
+
+Stale baseline entry: crate::a / cycle crate::a > crate::c accepts 3, the code has 2.
 ```
 
 ### a cycle that is written from another node is another key
@@ -2434,6 +2496,19 @@ Result:
 rule `r` is violated in 2 place(s):
   features/pay/card.ts:1:1: [r] features/pay/card.ts uses features/cart/total.ts/#Total (import-type)
   features/pay/card.ts:2:1: [r] features/pay/card.ts uses features/cart/index.ts/#again (import, written as features/pay/index.ts/#again)
+```
+
+### a unit that is in no place has no note when a place matches a start of its path that is no unit
+
+```json
+{"must_be_in":{"places":["*/*"]},"name":"r","subjects":{"any_of":["features/cart/total.ts"]}}
+```
+
+Result:
+
+```text
+rule `r` is violated in 1 place(s):
+  features/cart/total.ts: [r] features/cart/total.ts is in none of the places of the rule
 ```
 
 ## 13-used.json
@@ -3048,7 +3123,7 @@ rule `r` is violated in 1 place(s):
   src/util.rs: [r] crate::util is in none of the places of the rule
 ```
 
-### places match exactly
+### places match exactly, and a unit below a place has a note
 
 ```json
 {"must_be_in":{"places":["crate::api"]},"name":"r","subjects":{"any_of":["crate::api::**"]}}
@@ -3058,7 +3133,21 @@ Result:
 
 ```text
 rule `r` is violated in 1 place(s):
-  src/api/http.rs: [r] crate::api::http is in none of the places of the rule
+  src/api/http.rs: [r] crate::api::http is in none of the places of the rule (a place matches a unit above it: a pattern that ends in `**` also matches the units below)
+```
+
+### a unit below a place has no note when the places divide what is below that place
+
+```json
+{"must_be_in":{"places":["crate","crate::api::**","crate::domain::**"]},"name":"r","subjects":{"all":true}}
+```
+
+Result:
+
+```text
+rule `r` is violated in 2 place(s):
+  src/util.rs: [r] crate::util is in none of the places of the rule
+  [r] crate::orphan is in none of the places of the rule
 ```
 
 ### units that are all in places pass

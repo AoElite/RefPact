@@ -93,6 +93,28 @@ pub fn format_baseline(entries: &[BaselineEntry]) -> String {
     text
 }
 
+/// The start of the `what` of a cycle.
+const CYCLE: &str = "cycle ";
+
+/// The report of the stale entries of one rule in a baseline file.
+pub fn render_stale(rule: &str, file: &str, entries: &[StaleEntry]) -> String {
+    let mut text = format!("rule `{rule}`: the baseline {file} accepts more than the code has:");
+    for entry in entries {
+        // The numbers of a cycle are the nodes of its tangle (SPEC 7.2).
+        let of = if entry.what.starts_with(CYCLE) {
+            "a tangle of "
+        } else {
+            ""
+        };
+        text.push_str(&format!(
+            "\n  {}: {} (the baseline accepts {of}{}, the code has {of}{})",
+            entry.unit, entry.what, entry.count, entry.found
+        ));
+    }
+    text.push_str("\nRun the tests with REFPACT_BASELINE=update to write the baseline again.");
+    text
+}
+
 /// The `unit` and `what` of the key of a violation.
 pub fn baseline_key(violation: &Violation, format: &PathFormat) -> (String, String) {
     match &violation.detail {
@@ -112,7 +134,12 @@ pub fn baseline_key(violation: &Violation, format: &PathFormat) -> (String, Stri
                 .min_by_key(|&index| &nodes[index])
                 .unwrap_or(0);
             nodes.rotate_left(first);
-            (nodes[0].clone(), format!("cycle {}", nodes.join(" > ")))
+            // A check of the user can give a cycle without steps: its unit is the key.
+            let unit = nodes
+                .first()
+                .cloned()
+                .unwrap_or_else(|| format.print(&violation.unit));
+            (unit, format!("{CYCLE}{}", nodes.join(" > ")))
         }
         Detail::Unused => (format.print(&violation.unit), "unused".to_owned()),
         Detail::Reaches { end, .. } => (
@@ -150,7 +177,32 @@ pub fn baseline_key(violation: &Violation, format: &PathFormat) -> (String, Stri
     }
 }
 
-/// One entry for each key of the violations, with the number of violations that have it.
+/// What a violation counts for in a baseline: the nodes of the tangle for a cycle, so that a
+/// tangle with more nodes is more than its entry accepts, and 1 for every other violation.
+/// It is 1 or more, also for the cycle of a check of the user that gives no size: an entry
+/// with a count of 0 cannot be read.
+fn weight(violation: &Violation) -> u32 {
+    match &violation.detail {
+        Detail::Cycle { size, .. } => u32::try_from(*size).unwrap_or(u32::MAX).max(1),
+        _ => 1,
+    }
+}
+
+/// The note of a cycle that remains though the baseline has its key: without it, nothing
+/// says why the entry does not accept the cycle. A tangle has two nodes or more, so for a
+/// cycle with a size a count of 1 is that of a baseline from before version 0.2.0, which
+/// had the number of cycles. The cycle of a check of the user that gives no size counts 1.
+fn accepted_tangle(count: u32, size: usize) -> String {
+    let mut note = format!("the baseline accepts a tangle of {count}");
+    if count < 2 && size >= 2 {
+        note.push_str(
+            ": a baseline of a version before 0.2.0 has the number of cycles there, write it again",
+        );
+    }
+    note
+}
+
+/// One entry for each key of the violations, with what the violations that have it count for.
 pub fn baseline_entries(violations: &[Violation], format: &PathFormat) -> Vec<BaselineEntry> {
     let mut entries: Vec<BaselineEntry> = Vec::new();
     for violation in violations {
@@ -159,12 +211,12 @@ pub fn baseline_entries(violations: &[Violation], format: &PathFormat) -> Vec<Ba
             .iter_mut()
             .find(|entry| entry.rule == violation.rule && entry.unit == unit && entry.what == what)
         {
-            Some(entry) => entry.count += 1,
+            Some(entry) => entry.count = entry.count.saturating_add(weight(violation)),
             None => entries.push(BaselineEntry {
                 rule: violation.rule.clone(),
                 unit,
                 what,
-                count: 1,
+                count: weight(violation),
             }),
         }
     }
@@ -186,7 +238,7 @@ pub fn apply_baseline(
             .iter_mut()
             .find(|(unit, what, _)| *unit == entry.unit && *what == entry.what)
         {
-            Some(allowance) => allowance.2 += entry.count,
+            Some(allowance) => allowance.2 = allowance.2.saturating_add(entry.count),
             None => allowances.push((&entry.unit, &entry.what, entry.count)),
         }
     }
@@ -196,8 +248,10 @@ pub fn apply_baseline(
         .collect();
     let found = |unit: &str, what: &str| {
         keys.iter()
-            .filter(|(key_unit, key_what)| key_unit == unit && key_what == what)
-            .count() as u32
+            .zip(&violations)
+            .filter(|((key_unit, key_what), _)| key_unit == unit && key_what == what)
+            .map(|(_, violation)| weight(violation))
+            .fold(0u32, u32::saturating_add)
     };
     let accepted = |unit: &str, what: &str| {
         allowances
@@ -221,7 +275,90 @@ pub fn apply_baseline(
         .iter()
         .zip(&keys)
         .filter(|(_, (unit, what))| !accepted(unit, what))
-        .map(|(violation, _)| violation.clone())
+        .map(|(violation, (unit, what))| {
+            let mut violation = violation.clone();
+            let allowance = allowances.iter().find(|(allowed_unit, allowed_what, _)| {
+                allowed_unit == unit && allowed_what == what
+            });
+            if let (Detail::Cycle { size, .. }, Some((_, _, count))) =
+                (&violation.detail, allowance)
+            {
+                let said = accepted_tangle(*count, *size);
+                violation.note = Some(match violation.note.take() {
+                    Some(note) => format!("{note}, {said}"),
+                    None => said,
+                });
+            }
+            violation
+        })
         .collect();
     Applied { remaining, stale }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A cycle of a check of the user may give no size and no steps. Its entry still has a
+    /// unit and a count that a baseline can hold, and the baseline that is written accepts
+    /// the violation.
+    #[test]
+    fn a_cycle_without_a_size_is_written_with_a_count_that_can_be_read() {
+        let violation = Violation {
+            rule: "r".to_owned(),
+            unit: vec!["a".to_owned()],
+            file: "a".to_owned(),
+            line: 1,
+            column: 1,
+            note: None,
+            detail: Detail::Cycle {
+                steps: Vec::new(),
+                size: 0,
+            },
+        };
+        let format = PathFormat::plain("::");
+        let entries = baseline_entries(std::slice::from_ref(&violation), &format);
+        assert_eq!((entries[0].unit.as_str(), entries[0].count), ("a", 1));
+        let read = parse_baseline(&format_baseline(&entries)).unwrap();
+        let applied = apply_baseline("r", vec![violation.clone()], &read, &format);
+        assert_eq!((applied.remaining.len(), applied.stale.len()), (0, 0));
+        // Two of them are more than the entry accepts. Its count of 1 is that of this
+        // version, so the note does not name an older one.
+        let applied = apply_baseline("r", vec![violation.clone(), violation], &read, &format);
+        assert_eq!(
+            applied.remaining[1].note.as_deref(),
+            Some("the baseline accepts a tangle of 1")
+        );
+    }
+
+    /// The sizes that a check of the user gives can be any number: their sum stays a count,
+    /// and it is not a small number that an entry accepts.
+    #[test]
+    fn the_weights_of_large_cycles_do_not_wrap() {
+        let cycle = |size: usize| Violation {
+            rule: "r".to_owned(),
+            unit: vec!["a".to_owned()],
+            file: "a".to_owned(),
+            line: 1,
+            column: 1,
+            note: None,
+            detail: Detail::Cycle {
+                steps: Vec::new(),
+                size,
+            },
+        };
+        let format = PathFormat::plain("::");
+        let large = vec![cycle(u32::MAX as usize), cycle(3)];
+        let entries = baseline_entries(&large, &format);
+        assert_eq!(entries[0].count, u32::MAX);
+        let small = BaselineEntry {
+            count: 2,
+            ..entries[0].clone()
+        };
+        let applied = apply_baseline("r", large.clone(), &[small.clone(), small], &format);
+        assert_eq!(applied.remaining.len(), 2);
+        let twice = [entries[0].clone(), entries[0].clone()];
+        let applied = apply_baseline("r", large, &twice, &format);
+        assert_eq!((applied.remaining.len(), applied.stale.len()), (0, 0));
+    }
 }

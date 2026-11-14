@@ -12,10 +12,13 @@ import type {
   BaselineEntry,
   BaselineKey,
   EvaluateResult,
+  GraphResult,
   ParsedBaseline,
   PathFormat,
   RuleError,
   SelectResult,
+  StaleEntry,
+  TanglesResult,
   Violation,
 } from "./results.ts";
 import { call, currentGeneration } from "./wasm.ts";
@@ -74,6 +77,19 @@ export function evaluate(rule: Rule, facts: FactSet): EvaluateResult {
  */
 export function select(rule: Rule, facts: FactSet): SelectResult {
   return request("select", { handle: handleOf(facts), rule });
+}
+
+/**
+ * The edges of a graph of what a rule sees, as the core makes them (SPEC section 8): the unit
+ * graph, or with `subjects` the graph of the subjects.
+ */
+export function graph(rule: Rule, facts: FactSet, subjects: boolean): GraphResult {
+  return request("graph", { handle: handleOf(facts), rule, subjects });
+}
+
+/** The tangles of the graph that {@link graph} gives. The core searches them only for this request. */
+export function tangles(rule: Rule, facts: FactSet, subjects: boolean): TanglesResult {
+  return request("graph", { handle: handleOf(facts), rule, subjects, tangles: true });
 }
 
 /** The text form of a diagram: a Mermaid flowchart, or a Graphviz graph in DOT. */
@@ -150,6 +166,11 @@ export function renderError(error: RuleError): string {
 /** All errors of one rule, one per line, with a heading. */
 export function renderErrors(rule: string, errors: readonly RuleError[]): string {
   return request<{ text: string }>("render-errors", { rule, errors }).text;
+}
+
+/** The report of the stale entries of one rule in a baseline file. */
+export function renderStale(rule: string, file: string, entries: readonly StaleEntry[]): string {
+  return request<{ text: string }>("render-stale", { rule, file, entries }).text;
 }
 
 /** The `unit` and `what` of the key of a violation (SPEC 7.1). */

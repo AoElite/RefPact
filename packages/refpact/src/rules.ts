@@ -2,7 +2,7 @@
 import { isBuiltin } from "node:module";
 
 import type { Baseline } from "./baseline.ts";
-import { applyBaseline, diagram, evaluate, renderErrors, renderViolations, select } from "./core/index.ts";
+import { applyBaseline, diagram, evaluate, graph, renderErrors, renderStale, renderViolations, select, tangles } from "./core/index.ts";
 import type { DiagramFormat, DiagramNodes } from "./core/index.ts";
 import type {
   Constraint,
@@ -641,6 +641,15 @@ export type Failure =
       readonly message: string;
     };
 
+/** An answer of the core without errors. Throws the errors of the rule. */
+function answered<T extends { readonly ok: boolean }>(rule: string, answer: T | { readonly ok: false; readonly errors: readonly RuleError[] }): Extract<T, { ok: true }> {
+  if (!answer.ok) {
+    const { errors } = answer as { readonly errors: readonly RuleError[] };
+    throw new ArchitectureError({ type: "invalid", rule, errors, message: renderErrors(rule, errors) });
+  }
+  return answer as Extract<T, { ok: true }>;
+}
+
 /** The error that `check` throws. Its message is the report. */
 export class ArchitectureError extends Error {
   /** Why the rule did not pass. */
@@ -705,7 +714,10 @@ export class ImportRule {
     if (!selection.ok) {
       return selection;
     }
-    const scope = new (rule.constraint.type === "items" ? ItemScope : Scope)(rule.name, project.facts, selection, finder.names);
+    const scope = new (rule.constraint.type === "items" ? ItemScope : Scope)(rule.name, project.facts, selection, finder.names, {
+      graph: (subjects) => answered(rule.name, graph(rule, project.facts, subjects)),
+      tangles: (subjects) => answered(rule.name, tangles(rule, project.facts, subjects)).tangles,
+    });
     return { ok: true, violations: finder.find(scope, project) };
   }
 
@@ -807,10 +819,7 @@ export class ImportRule {
       return violated;
     }
     if (applied.stale.length > 0) {
-      const lines = applied.stale.map(
-        (entry) => `\n  ${entry.unit}: ${entry.what} (the baseline accepts ${entry.count}, the code has ${entry.found})`,
-      );
-      const message = `rule \`${rule}\`: the baseline ${baseline.file} accepts violations that are gone:${lines.join("")}\nRun the tests with REFPACT_BASELINE=update to write the baseline again.`;
+      const message = renderStale(rule, baseline.file, applied.stale);
       return { type: "stale-baseline", rule, file: baseline.file, entries: applied.stale, message };
     }
     return undefined;

@@ -136,6 +136,38 @@ export type SelectResult =
       readonly errors: readonly RuleError[];
     };
 
+/** The tangles of a graph of what a rule sees (SPEC section 8), or the reasons why the rule cannot be evaluated. */
+export type TanglesResult =
+  | {
+      /** The rule can be evaluated. */
+      readonly ok: true;
+      /** The tangles. A step of `cycle` is `[node, edge]`, with the place of the edge in the edges of the node. */
+      readonly tangles: readonly { readonly members: readonly number[]; readonly cycle: readonly (readonly [number, number])[] }[];
+    }
+  | {
+      /** The rule cannot be evaluated. */
+      readonly ok: false;
+      /** The reasons, in the order of the specification. */
+      readonly errors: readonly RuleError[];
+    };
+
+/** The edges of a graph of what a rule sees (SPEC section 8), or the reasons why the rule cannot be evaluated. */
+export type GraphResult =
+  | {
+      /** The rule can be evaluated. */
+      readonly ok: true;
+      /** The unit of each node, by position in the fact set. Absent for the unit graph, where a node is its unit. */
+      readonly nodes?: readonly number[];
+      /** For each node: its edges, each as `[to, fact, path]`, with the place of the path in `[target, ...aliases]`. */
+      readonly edges: readonly (readonly (readonly [number, number, number])[])[];
+    }
+  | {
+      /** The rule cannot be evaluated. */
+      readonly ok: false;
+      /** The reasons, in the order of the specification. */
+      readonly errors: readonly RuleError[];
+    };
+
 /** A reference that a rule sees. */
 export interface SelectedReference {
   /** The position of the fact. */

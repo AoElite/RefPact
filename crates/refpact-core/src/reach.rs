@@ -33,14 +33,43 @@ pub(crate) fn reachable_from<'c>(
     Box::new(move |scope: &Scope<'_>| -> Vec<Violation> { unreachable(scope, &roots) })
 }
 
+/// The note of a unit that is in no place, below a unit that is the end of a place (SPEC 4.10).
+const ABOVE_IS_IN_A_PLACE: &str =
+    "a place matches a unit above it: a pattern that ends in `**` also matches the units below";
+
 /// SPEC 4.10: each unit must be matched exactly by one of the places.
 pub(crate) fn in_places<'c>(places: &'c [RawPattern], setup: &mut Setup) -> Box<dyn Checker + 'c> {
     let places = setup.units(places, Role::Place);
     Box::new(NoReferences(move |scope: &Scope<'_>| -> Vec<Violation> {
         let units = &scope.facts().units;
-        of_units(scope, Detail::Outside, |unit| {
-            !places.iter().any(|place| place.matches(&units[unit]))
-        })
+        let in_place = |unit: usize| places.iter().any(|place| place.matches(&units[unit]));
+        let mut violations = Vec::new();
+        // For each unit: whether a unit below is in a place. Then the places divide what is
+        // below the unit, and a pattern with `**` at the unit would take all of it. Only a
+        // violation needs it, so a rule that passes does not pay for it.
+        let mut placed_below: Option<Vec<bool>> = None;
+        for position in scope.subjects() {
+            let Some(unit) = scope.unit(&units[position]).filter(|&unit| !in_place(unit)) else {
+                continue;
+            };
+            let placed_below = placed_below.get_or_insert_with(|| {
+                let mut below = vec![false; units.len()];
+                for unit in (0..units.len()).filter(|&unit| in_place(unit)) {
+                    for &above in &scope.unit_prefixes(unit)[1..] {
+                        below[above] = true;
+                    }
+                }
+                below
+            });
+            let mut violation = scope.violation_of_unit(position, Detail::Outside);
+            // A place that ends at a unit above is most often a pattern without `**`.
+            let ends_above = |&above: &usize| in_place(above) && !placed_below[above];
+            if scope.unit_prefixes(unit)[1..].iter().any(ends_above) {
+                violation.note = Some(ABOVE_IS_IN_A_PLACE.to_owned());
+            }
+            violations.push(violation);
+        }
+        violations
     }))
 }
 

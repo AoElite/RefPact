@@ -15,7 +15,7 @@
  */
 export { Baseline, baseline } from "./baseline.ts";
 export { Graph, ItemScope, Scope } from "./custom.ts";
-export type { ImportEdge, SeenImport, SeenMarker } from "./custom.ts";
+export type { ImportEdge, SeenImport, SeenMarker, Tangle } from "./custom.ts";
 export { compilerVersion } from "./frontend/compiler.ts";
 export type { Filters } from "./filters.ts";
 export { Rules, RuleSet, rules } from "./group.ts";

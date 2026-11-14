@@ -39,7 +39,7 @@ function pathEquals(a: Path, b: Path): boolean {
 }
 
 /** The number of cases the directory holds. A harness that runs fewer cases must fail. */
-const EXPECTED_CASES = 293;
+const EXPECTED_CASES = 298;
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };
@@ -428,7 +428,8 @@ function checkViolation(expected: JsonObject, violation: Violation, separator: s
         equal = value === violation.column;
         break;
       case "note":
-        equal = value === violation.note;
+        // `null` expects a violation without a note.
+        equal = (value ?? undefined) === violation.note;
         break;
       case "target":
         equal = samePath(value, uses?.target);

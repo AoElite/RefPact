@@ -794,23 +794,7 @@ impl fmt::Display for Failure {
                 rule,
                 file,
                 entries,
-            } => {
-                write!(
-                    f,
-                    "rule `{rule}`: the baseline {file} accepts violations that are gone:"
-                )?;
-                for entry in entries {
-                    write!(
-                        f,
-                        "\n  {}: {} (the baseline accepts {}, the code has {})",
-                        entry.unit, entry.what, entry.count, entry.found
-                    )?;
-                }
-                write!(
-                    f,
-                    "\nRun the tests with REFPACT_BASELINE=update to write the baseline again."
-                )
-            }
+            } => f.write_str(&crate::core::render_stale(rule, file, entries)),
             Failure::Baseline { message } => f.write_str(message),
             Failure::Malformed { rule, message } => {
                 write!(f, "rule `{rule}` cannot be checked:\n  {message}")

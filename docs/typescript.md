@@ -694,7 +694,7 @@ rule("a file imports at most ten files")
 | `subjects` | the files that the rule selects |
 | `imports` | the imports that the rule sees, of all files, in the order of the facts. Each has `fact`, `reference`, `file`, `subject` (whether the rule selects the file), `paths` and `owners`, the file of each path or `undefined` for a package. |
 | `markers`, `declarations` | the markers and the declarations of the selected files that the rule sees |
-| `graph()` | the graph of all files: `edgesOf(file)` are the files that a file imports, and `chain(from, isEnd)` is a shortest chain of imports to the nearest file that is an end |
+| `graph()`, `subjectGraph()` | the graph of all files, and the graph of the selected files only: `unit_graph()` and `graph(None)` of a [Rust check](rust.md#graphs-in-a-check). `edgesOf(file)` are the files that a file imports, `chain(from, isEnd)` is a shortest chain of imports to the nearest file that is an end, and `tangles()` are the groups of files that all reach each other, each with its `members` and a shortest `cycle`. The tangles of `subjectGraph()` are the cycles that `mustBeAcyclic` reports. A check in TypeScript has no graph of slices |
 | `matched(name)` | the files that a list of file patterns of the check matches |
 | `violationAt(fact, message, key?)`, `violationOfItem(item, message, key?)`, `violationOfFile(file, message, key?)` | a violation at the place of a fact or of an item, or about a file as a whole |
 
