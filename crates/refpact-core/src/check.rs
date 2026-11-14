@@ -575,8 +575,9 @@ impl<'a> Scope<'a> {
 
     /// The edges of a graph: for each node, the nodes that its references lead to, each once,
     /// with the first reference. `node_of` gives the node of a unit, if it has one. A
-    /// reference leads to the node of the owner of its first path that has an owner, and a
-    /// reference inside one node is no edge.
+    /// reference leads to the node of the owner of each of its paths, so a use through a
+    /// re-export leads to the unit that re-exports and to the unit of the definition. A
+    /// path inside the node of the reference is no edge.
     pub fn edges(
         &self,
         count: usize,
@@ -588,19 +589,17 @@ impl<'a> Scope<'a> {
             let Some(from) = node_of(seen.unit) else {
                 continue;
             };
-            let owned = self
-                .owners(&seen)
-                .find_map(|(path, owner)| owner.map(|unit| (path, unit)));
-            let Some((target, owner)) = owned else {
-                continue;
-            };
-            let Some(to) = node_of(owner) else { continue };
-            if to != from && known.insert((from, to)) {
-                edges[from].push(Edge {
-                    to,
-                    fact: seen.position,
-                    target,
-                });
+            for (target, owner) in self.owners(&seen) {
+                let Some(to) = owner.and_then(&node_of) else {
+                    continue;
+                };
+                if to != from && known.insert((from, to)) {
+                    edges[from].push(Edge {
+                        to,
+                        fact: seen.position,
+                        target,
+                    });
+                }
             }
         }
         edges

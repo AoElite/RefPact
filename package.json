@@ -3,9 +3,9 @@
   "private": true,
   "description": "Workspace of the TypeScript side of refpact. The Rust side is the Cargo workspace in the same directory.",
   "scripts": {
-    "build": "pnpm --filter @aoelite/refpact build",
-    "typecheck": "pnpm --filter @aoelite/refpact typecheck",
-    "test": "pnpm --filter @aoelite/refpact build && pnpm --filter @aoelite/refpact test && pnpm --filter fixture-app test && pnpm --filter fixture-app test:node",
+    "build": "pnpm --filter @aoelite/refpact-ts build",
+    "typecheck": "pnpm --filter @aoelite/refpact-ts typecheck",
+    "test": "pnpm --filter @aoelite/refpact-ts build && pnpm --filter @aoelite/refpact-ts test && pnpm --filter fixture-app test && pnpm --filter fixture-app test:node",
     "api-docs": "cargo doc --package refpact --package refpact-core --no-deps && pnpm --filter refpact-api-docs build"
   }
 }

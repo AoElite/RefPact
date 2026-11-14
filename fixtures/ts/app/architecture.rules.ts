@@ -1,7 +1,7 @@
 // The rules of the clean fixture: the TypeScript counterparts of the five example rules in
 // `crates/refpact/tests/five_rules.rs`, written as a project would write them.
-import { allExcept, anyOf, loadProject, pkg, rule } from "@aoelite/refpact";
-import type { ImportRule } from "@aoelite/refpact";
+import { allExcept, anyOf, loadProject, pkg, rule } from "@aoelite/refpact-ts";
+import type { ImportRule } from "@aoelite/refpact-ts";
 
 export const app = loadProject(new URL("./tsconfig.json", import.meta.url).pathname);
 

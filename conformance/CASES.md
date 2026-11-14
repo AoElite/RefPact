@@ -1538,6 +1538,8 @@ Paths are printed with the separator `/`.
 | 12 | `features/y/one.ts` | `features/y/one.ts:2:1` | import `npm:lib`, also `features/z/one.ts/#s` |  |
 | 13 | `features/z/one.ts` | `features/z/one.ts:1:1` | import `features/y/one.ts/#q` (candidate) |  |
 | 14 | `shared/util.ts` | `shared/util.ts:1:1` | import `features/x/one.ts/#r` |  |
+| 15 | `g/one.ts` | `g/one.ts:1:1` | import `g/index.ts/#t`, also `g/two.ts/#t` |  |
+| 16 | `g/two.ts` | `g/two.ts:1:1` | import `g/one.ts/#o` |  |
 
 ### a tangle gives one violation with a shortest cycle through its first unit
 
@@ -1590,7 +1592,7 @@ No violation.
 Result:
 
 ```text
-rule `r` is violated in 2 place(s):
+rule `r` is violated in 3 place(s):
   a.ts:2:1: [r] a.ts is in a cycle of 2 (the tangle has 4 in all):
       a.ts -> c.ts  at a.ts:2:1, uses c.ts/#g (import)
       c.ts -> a.ts  at c.ts:1:1, uses a.ts/#h (import)
@@ -1598,6 +1600,24 @@ rule `r` is violated in 2 place(s):
       features/x/one.ts -> features/x/two.ts  at features/x/one.ts:1:1, uses features/x/two.ts/#p (import)
       features/x/two.ts -> features/y/one.ts  at features/x/two.ts:1:1, uses features/y/one.ts/#q (import)
       features/y/one.ts -> features/x/one.ts  at features/y/one.ts:1:1, uses features/x/one.ts/#r (import)
+  g/one.ts:1:1: [r] g/one.ts is in a cycle of 2 (the tangle has 2 in all):
+      g/one.ts -> g/two.ts  at g/one.ts:1:1, uses g/two.ts/#t (import)
+      g/two.ts -> g/one.ts  at g/two.ts:1:1, uses g/one.ts/#o (import)
+```
+
+### each path of a reference gives an edge, also when the owner of the first path is not selected
+
+```json
+{"must_be_acyclic":{},"name":"r","subjects":{"any_of":["g/one.ts","g/two.ts"]}}
+```
+
+Result:
+
+```text
+rule `r` is violated in 1 place(s):
+  g/one.ts:1:1: [r] g/one.ts is in a cycle of 2 (the tangle has 2 in all):
+      g/one.ts -> g/two.ts  at g/one.ts:1:1, uses g/two.ts/#t (import)
+      g/two.ts -> g/one.ts  at g/two.ts:1:1, uses g/one.ts/#o (import)
 ```
 
 ### slices are the nodes, and references inside a slice give no edge
@@ -2641,11 +2661,10 @@ Result:
 
 ```text
 rule `r` is violated in 1 place(s):
-  ui/page.ts:1:1: [r] ui/page.ts reaches npm:pg/#Pool in 5 step(s):
+  ui/page.ts:1:1: [r] ui/page.ts reaches npm:pg/#Pool in 4 step(s):
       ui/page.ts -> app/service.ts  at ui/page.ts:1:1, uses app/service.ts/#run (import)
       app/service.ts -> app/repo.ts  at app/service.ts:2:1, uses app/repo.ts/#find (import)
-      app/repo.ts -> db/index.ts  at app/repo.ts:1:1, uses db/index.ts/#query (import)
-      db/index.ts -> db/client.ts  at db/index.ts:1:1, uses db/client.ts/#query (import)
+      app/repo.ts -> db/client.ts  at app/repo.ts:1:1, uses db/client.ts/#query (import)
       db/client.ts uses npm:pg/#Pool  at db/client.ts:1:1 (import)
 ```
 
@@ -2834,7 +2853,7 @@ Paths are printed with the separator `::`.
 | 6 | `crate::tools::cli` | `src/tools/cli.rs:1:1` | use `crate::core::model::Order` |  |
 | 7 | `crate::core::model` | `src/core/model.rs:1:1` | use `crate::testonly::f` | `test` |
 | 8 | `crate::dead::inner` | `src/dead/inner.rs:1:1` | use `crate::core::helper` |  |
-| 9 | `crate::api::http` | `src/api/http.rs:2:1` | use `crate::facade::X`, also `crate::island::part::X` |  |
+| 9 | `crate::api::http` | `src/api/http.rs:2:1` | use `crate::facade::X`, also `crate::behind::X` |  |
 
 ### a unit that no chain from a root leads to is a violation
 

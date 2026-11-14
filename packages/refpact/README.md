@@ -5,12 +5,12 @@ ordinary tests under Vitest or `node --test`. The compiler of your project resol
 import.
 
 ```sh
-pnpm add --save-dev @aoelite/refpact
+pnpm add --save-dev @aoelite/refpact-ts
 ```
 
 ```ts
 import { test } from "vitest";
-import { anyOf, loadProject, pkg, rule } from "@aoelite/refpact";
+import { anyOf, loadProject, pkg, rule } from "@aoelite/refpact-ts";
 
 const app = loadProject("tsconfig.json");
 

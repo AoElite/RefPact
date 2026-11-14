@@ -10,7 +10,7 @@ importers:
 
   fixtures/ts/app:
     devDependencies:
-      '@aoelite/refpact':
+      '@aoelite/refpact-ts':
         specifier: workspace:*
         version: link:../../../packages/refpact
       '@types/node':

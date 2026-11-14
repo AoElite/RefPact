@@ -13,6 +13,9 @@ Add the crate as a dev-dependency:
 cargo add --dev refpact
 ```
 
+That is the whole setup. The crate runs `cargo` and `rustc`, and `rust-analyzer` when you load
+with [`resolving_members()`](#method-calls-and-fields). It does not use Node or npm.
+
 Write rules in a test file, for example `tests/architecture.rs`:
 
 ```rust
@@ -215,6 +218,9 @@ rule("the parts of the crate form no cycle")
   with `crate::*`.
 - A reference from a selected module to an item of another selected module is an edge. The
   filters apply: `except_in_test_code()` removes the edges that only tests make.
+- A reference through a re-export gives two edges: one to the module that re-exports, and one
+  to the module of the definition. With `pub use members::Member` in the crate root, a use of
+  `crate::Member` is an edge to `crate::members`, also when the rule does not select the root.
 - A *tangle* is a group of nodes that all reach each other. Each tangle gives one violation,
   which shows one shortest cycle through its first node, the file and line of every step,
   and the size of the tangle. One tangle can hold many cycles. When the shown cycle is

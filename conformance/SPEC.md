@@ -241,12 +241,15 @@ matches at least one slice pattern exactly. Each slice of a selected unit is a n
 path of the node is that prefix. A selected unit without a slice belongs to no node. Nodes
 are ordered by the first unit of `units` that belongs to them.
 
-**Edges.** A reference fact gives an edge when checks 1 to 4 of section 4.2 are true and the
-following holds. Let `P` be the first path in `[target, aliases...]` that has an owner. The
-owner of `P` is a selected unit that belongs to a node, and that node is not the node of the
-fact's unit. The edge goes from the node of the fact's unit to the node of the owner. The
-first fact that gives an edge is the *witness* of the edge. The edges of a node are ordered
-by their witnesses, in fact order.
+**Edges.** A reference fact gives an edge for each path `P` in `[target, aliases...]` when
+checks 1 to 4 of section 4.2 are true and the following holds. `P` has an owner. The owner of
+`P` is a selected unit that belongs to a node, and that node is not the node of the fact's
+unit. The edge goes from the node of the fact's unit to the node of the owner. So a use
+through a re-export gives an edge to the unit that re-exports and an edge to the unit of the
+definition. Two nodes have at most one edge in each direction. The first fact that gives an
+edge is the *witness* of the edge, and the first such path of that fact is the path of the
+edge. The edges of a node are ordered by their witnesses, in fact order, and the edges of
+one witness by their paths, in the order of the list.
 
 **Cycles.** A *tangle* is a strongly connected component of the graph that has two or more
 nodes. Each tangle gives one violation. Tangles are ordered by their first node. The
@@ -304,10 +307,10 @@ has no `note`.
 ### 4.8 The unit graph and `must_not_reach`
 
 The *unit graph* has one node for each unit, selected or not. A reference fact gives an edge
-when checks 2 to 4 of section 4.2 are true and the following holds. Let `P` be the first path
-in `[target, aliases...]` that has an owner. The owner of `P` is not the fact's unit. The edge
-goes from the fact's unit to the owner. Witnesses and the order of edges are as in section
-4.5.
+for each path `P` in `[target, aliases...]` when checks 2 to 4 of section 4.2 are true and
+the following holds. `P` has an owner, and the owner of `P` is not the fact's unit. The edge
+goes from the fact's unit to the owner. Witnesses, the paths of the edges and the order of
+the edges are as in section 4.5.
 
 `must_not_reach` forbids a use of the targets through any chain of units. The forbidden
 targets are those of section 4.2.

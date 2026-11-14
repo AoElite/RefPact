@@ -18,8 +18,8 @@ cargo xtask wasm                                # the core for the package; run 
 node xtask/node/bench-core.mjs                  # times the core from TypeScript on 3000 files and 120000 imports
 pnpm test                                       # build, package tests with TypeScript 7.0.2, and the fixture under Vitest and node --test
 pnpm typecheck
-pnpm --filter @aoelite/refpact test:ts6                  # the package tests with TypeScript 6.0.3
-pnpm --filter @aoelite/refpact test:ts71                 # the package tests with TypeScript 7.1.0-beta
+pnpm --filter @aoelite/refpact-ts test:ts6                  # the package tests with TypeScript 6.0.3
+pnpm --filter @aoelite/refpact-ts test:ts71                 # the package tests with TypeScript 7.1.0-beta
 cargo xtask mutants ts                          # the same proof for the TypeScript detections (about 25 s)
 ```
 
@@ -42,7 +42,7 @@ needs only Rust and Node. The mutations are listed in
 [`xtask/src/mutants/list.rs`](../xtask/src/mutants/list.rs). The `ts` suite also runs Node,
 for Vitest and for the TypeScript parser, in the two helpers in [`xtask/node`](../xtask/node).
 
-`pnpm --filter @aoelite/refpact test` runs the conformance cases, the planted fixture, the rule tests,
+`pnpm --filter @aoelite/refpact-ts test` runs the conformance cases, the planted fixture, the rule tests,
 and the compiler on both fixtures. The conformance cases run three ways: against the core in
 Rust, through its JSON in Rust, and from TypeScript through WebAssembly. A test that runs
 Vitest by itself uses the module that is in `packages/refpact/wasm`, so build it again after a
@@ -67,7 +67,7 @@ on each pull request:
 ## Releases
 
 A release is a tag `vX.Y.Z`, the crates `refpact-core` and `refpact` on crates.io, and the
-package `@aoelite/refpact` on npm.
+package `@aoelite/refpact-ts` on npm.
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) makes it in one of two
 ways:
 

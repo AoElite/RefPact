@@ -41,9 +41,9 @@ the compiler that was loaded.
 
 | Version | Command | Status |
 |---|---|---|
-| `typescript@7.0.2` (`latest`) | `pnpm --filter @aoelite/refpact test` | The main target. All tests pass, and every mutation of `cargo xtask mutants ts` is caught. |
-| `typescript@6.0.3` | `pnpm --filter @aoelite/refpact test:ts6` | All tests pass. The mutations are not run with it. |
-| `typescript@7.1.0-beta` | `pnpm --filter @aoelite/refpact test:ts71` | All tests pass. Not a target: it is a beta, its final API can differ, and its calls go through three hand-written interfaces that only the tests check. |
+| `typescript@7.0.2` (`latest`) | `pnpm --filter @aoelite/refpact-ts test` | The main target. All tests pass, and every mutation of `cargo xtask mutants ts` is caught. |
+| `typescript@6.0.3` | `pnpm --filter @aoelite/refpact-ts test:ts6` | All tests pass. The mutations are not run with it. |
+| `typescript@7.1.0-beta` | `pnpm --filter @aoelite/refpact-ts test:ts71` | All tests pass. Not a target: it is a beta, its final API can differ, and its calls go through three hand-written interfaces that only the tests check. |
 
 The peer dependency is `typescript >=6.0.3 <7.2.0`.
 
@@ -57,13 +57,16 @@ TypeScript 6, an import that the compiler finds below `baseUrl` leads to its fil
 Add the package as a dev dependency, beside TypeScript and a test runner:
 
 ```sh
-pnpm add --save-dev @aoelite/refpact typescript vitest
+pnpm add --save-dev @aoelite/refpact-ts typescript vitest
 ```
+
+That is the whole setup. The package needs Node and TypeScript. It does not need a Rust
+toolchain: its core is included as WebAssembly.
 
 ```ts
 // architecture.test.ts
 import { test } from "vitest";
-import { allExcept, anyOf, loadProject, pkg, rule } from "@aoelite/refpact";
+import { allExcept, anyOf, loadProject, pkg, rule } from "@aoelite/refpact-ts";
 
 const app = loadProject("tsconfig.json");
 
@@ -261,7 +264,9 @@ rule("the ui does not import the database")
   that declares the name is.
 - **Cycles.** An edge is an import of a file of the project, in any kind: also
   `export .. from`, `require` and `import()`. A cycle that exists through type imports only
-  does no harm at run time; `ignoringTypeImports()` leaves those edges out.
+  does no harm at run time; `ignoringTypeImports()` leaves those edges out. An import through
+  a barrel file gives two edges: one to the barrel, and one to the file that declares the
+  name, also when the rule does not select the barrel.
 - **Workspaces.** Give `loadProject` the tsconfig file of each package and the root of the
   workspace: `loadProject(["packages/a/tsconfig.json", "packages/b/tsconfig.json"], { root: "." })`.
   The files of all packages are then units. An import of a package of the workspace that

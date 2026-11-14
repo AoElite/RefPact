@@ -39,7 +39,7 @@ function pathEquals(a: Path, b: Path): boolean {
 }
 
 /** The number of cases the directory holds. A harness that runs fewer cases must fail. */
-const EXPECTED_CASES = 292;
+const EXPECTED_CASES = 293;
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };

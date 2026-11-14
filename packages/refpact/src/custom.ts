@@ -136,8 +136,8 @@ export class Scope {
 
   /**
    * The graph of all files, selected or not, from the imports that the rule sees. An import
-   * leads to the file of its first path that a file has, and an import of the own file is
-   * no edge.
+   * leads to the file of each of its paths, so an import through a barrel file leads to the
+   * barrel and to the file that declares the name. An import of the own file is no edge.
    */
   graph(): Graph {
     this.made ??= new Graph(this.facts, this.selection);

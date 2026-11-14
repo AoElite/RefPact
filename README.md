@@ -12,6 +12,8 @@ rule("the domain does not use storage")
 
 - **Rules are plain values in a test file.** There is no configuration file and no CLI.
 - **One rule vocabulary for both languages.** One specification defines how rules are evaluated.
+- **Each language stands alone.** A Rust project needs only the crate and `cargo test`. A
+  TypeScript project needs only the npm package. Neither needs the toolchain of the other.
 - **A rule that cannot fail is an error.** A misspelled path fails the test. It does not pass.
 - **Rust:** runs under `cargo test` on stable Rust. It needs no compiler plugin.
 - **TypeScript 6 and 7:** runs under Vitest or `node --test`. The compiler of your project resolves each import. A JavaScript project is read through its `jsconfig.json`, or with default options when it has no config.
@@ -68,14 +70,14 @@ module and all modules below it.
 Add the package as a dev dependency, beside TypeScript 6 or 7 and a test runner:
 
 ```sh
-pnpm add --save-dev @aoelite/refpact
+pnpm add --save-dev @aoelite/refpact-ts
 ```
 
 Write the rules in a test file, for example `architecture.test.ts`:
 
 ```ts
 import { test } from "vitest";
-import { anyOf, loadProject, pkg, rule } from "@aoelite/refpact";
+import { anyOf, loadProject, pkg, rule } from "@aoelite/refpact-ts";
 
 const app = loadProject("tsconfig.json");
 
