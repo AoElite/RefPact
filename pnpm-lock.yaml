@@ -10,12 +10,12 @@ importers:
 
   fixtures/ts/app:
     devDependencies:
+      '@aoelite/refpact':
+        specifier: workspace:*
+        version: link:../../../packages/refpact
       '@types/node':
         specifier: 26.6.6
         version: 26.6.6
-      refpact:
-        specifier: workspace:*
-        version: link:../../../packages/refpact
       typescript:
         specifier: 7.0.2
         version: 7.0.2

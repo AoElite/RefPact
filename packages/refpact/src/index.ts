@@ -3,7 +3,7 @@
  * as ordinary tests.
  *
  * ```ts
- * import { allExcept, anyOf, loadProject, pkg, rule } from "refpact";
+ * import { allExcept, anyOf, loadProject, pkg, rule } from "@aoelite/refpact";
  *
  * const app = loadProject("tsconfig.json");
  *

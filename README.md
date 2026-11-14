@@ -68,14 +68,14 @@ module and all modules below it.
 Add the package as a dev dependency, beside TypeScript 6 or 7 and a test runner:
 
 ```sh
-pnpm add --save-dev refpact
+pnpm add --save-dev @aoelite/refpact
 ```
 
 Write the rules in a test file, for example `architecture.test.ts`:
 
 ```ts
 import { test } from "vitest";
-import { anyOf, loadProject, pkg, rule } from "refpact";
+import { anyOf, loadProject, pkg, rule } from "@aoelite/refpact";
 
 const app = loadProject("tsconfig.json");
 

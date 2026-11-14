@@ -41,9 +41,9 @@ the compiler that was loaded.
 
 | Version | Command | Status |
 |---|---|---|
-| `typescript@7.0.2` (`latest`) | `pnpm --filter refpact test` | The main target. All tests pass, and every mutation of `cargo xtask mutants ts` is caught. |
-| `typescript@6.0.3` | `pnpm --filter refpact test:ts6` | All tests pass. The mutations are not run with it. |
-| `typescript@7.1.0-beta` | `pnpm --filter refpact test:ts71` | All tests pass. Not a target: it is a beta, its final API can differ, and its calls go through three hand-written interfaces that only the tests check. |
+| `typescript@7.0.2` (`latest`) | `pnpm --filter @aoelite/refpact test` | The main target. All tests pass, and every mutation of `cargo xtask mutants ts` is caught. |
+| `typescript@6.0.3` | `pnpm --filter @aoelite/refpact test:ts6` | All tests pass. The mutations are not run with it. |
+| `typescript@7.1.0-beta` | `pnpm --filter @aoelite/refpact test:ts71` | All tests pass. Not a target: it is a beta, its final API can differ, and its calls go through three hand-written interfaces that only the tests check. |
 
 The peer dependency is `typescript >=6.0.3 <7.2.0`.
 
@@ -57,13 +57,13 @@ TypeScript 6, an import that the compiler finds below `baseUrl` leads to its fil
 Add the package as a dev dependency, beside TypeScript and a test runner:
 
 ```sh
-pnpm add --save-dev refpact typescript vitest
+pnpm add --save-dev @aoelite/refpact typescript vitest
 ```
 
 ```ts
 // architecture.test.ts
 import { test } from "vitest";
-import { allExcept, anyOf, loadProject, pkg, rule } from "refpact";
+import { allExcept, anyOf, loadProject, pkg, rule } from "@aoelite/refpact";
 
 const app = loadProject("tsconfig.json");
 

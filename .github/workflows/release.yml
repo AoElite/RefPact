@@ -1,5 +1,5 @@
 # A release: a tag vX.Y.Z, the crates refpact-core and refpact on crates.io, and the package
-# refpact on npm. Run it by hand to release the next version, or push a tag vX.Y.Z whose
+# @aoelite/refpact on npm. Run it by hand to release the next version, or push a tag vX.Y.Z whose
 # version the files already have.
 #
 # How each run chooses what to do, and the secrets it needs: "Releases" in
@@ -27,7 +27,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  PACKAGE: refpact
+  PACKAGE: "@aoelite/refpact"
 
 jobs:
   release:
@@ -150,4 +150,4 @@ jobs:
           npm pkg delete private
           # LICENSE is a link to the one at the root, and npm does not follow links.
           cp --remove-destination ../../LICENSE LICENSE
-          npm publish
+          npm publish --access public

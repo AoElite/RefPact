@@ -1,6 +1,6 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "name": "refpact",
+  "name": "@aoelite/refpact",
   "entryPoints": [
     "../refpact/src/index.ts"
   ],

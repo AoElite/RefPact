@@ -1,6 +1,6 @@
 {
-  "name": "refpact",
-  "version": "0.1.0",
+  "name": "@aoelite/refpact",
+  "version": "0.1.1",
   "private": true,
   "description": "Architecture tests for TypeScript 6 and 7: rules about what files may import, checked as ordinary tests.",
   "license": "MIT",

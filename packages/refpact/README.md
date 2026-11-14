@@ -6,7 +6,7 @@ import.
 
 ```ts
 import { test } from "vitest";
-import { anyOf, loadProject, pkg, rule } from "refpact";
+import { anyOf, loadProject, pkg, rule } from "@aoelite/refpact";
 
 const app = loadProject("tsconfig.json");
 

@@ -70,9 +70,9 @@ jobs:
       # node --test.
       - run: pnpm test
       - name: Package tests with TypeScript 6
-        run: pnpm --filter refpact test:ts6
+        run: pnpm --filter @aoelite/refpact test:ts6
       - name: Package tests with TypeScript 7.1 (beta)
-        run: pnpm --filter refpact test:ts71
+        run: pnpm --filter @aoelite/refpact test:ts71
 
   docs:
     name: API references

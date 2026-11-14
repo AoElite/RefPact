@@ -18,8 +18,8 @@ cargo xtask wasm                                # the core for the package; run 
 node xtask/node/bench-core.mjs                  # times the core from TypeScript on 3000 files and 120000 imports
 pnpm test                                       # build, package tests with TypeScript 7.0.2, and the fixture under Vitest and node --test
 pnpm typecheck
-pnpm --filter refpact test:ts6                  # the package tests with TypeScript 6.0.3
-pnpm --filter refpact test:ts71                 # the package tests with TypeScript 7.1.0-beta
+pnpm --filter @aoelite/refpact test:ts6                  # the package tests with TypeScript 6.0.3
+pnpm --filter @aoelite/refpact test:ts71                 # the package tests with TypeScript 7.1.0-beta
 cargo xtask mutants ts                          # the same proof for the TypeScript detections (about 25 s)
 ```
 
@@ -42,7 +42,7 @@ needs only Rust and Node. The mutations are listed in
 [`xtask/src/mutants/list.rs`](../xtask/src/mutants/list.rs). The `ts` suite also runs Node,
 for Vitest and for the TypeScript parser, in the two helpers in [`xtask/node`](../xtask/node).
 
-`pnpm --filter refpact test` runs the conformance cases, the planted fixture, the rule tests,
+`pnpm --filter @aoelite/refpact test` runs the conformance cases, the planted fixture, the rule tests,
 and the compiler on both fixtures. The conformance cases run three ways: against the core in
 Rust, through its JSON in Rust, and from TypeScript through WebAssembly. A test that runs
 Vitest by itself uses the module that is in `packages/refpact/wasm`, so build it again after a
@@ -67,7 +67,7 @@ on each pull request:
 ## Releases
 
 A release is a tag `vX.Y.Z`, the crates `refpact-core` and `refpact` on crates.io, and the
-package `refpact` on npm.
+package `@aoelite/refpact` on npm.
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) makes it in one of two
 ways:
 
@@ -109,7 +109,8 @@ not run on the release commit; the release job tests it instead.
 1. Make the repository public. The pages of the packages on crates.io and npm link to the
    documents in it.
 2. Add two secrets to the repository: `CARGO_REGISTRY_TOKEN`, a crates.io token that can
-   publish new crates, and `NPM_TOKEN`, an npm token that can publish.
+   publish new crates, and `NPM_TOKEN`, an npm token that can publish to the scope
+   `@aoelite`. npm refuses the name `refpact` without a scope, as too similar to `react`.
 
 ## Documentation
 
