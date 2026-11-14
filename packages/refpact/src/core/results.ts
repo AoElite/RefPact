@@ -142,7 +142,12 @@ export type TanglesResult =
       /** The rule can be evaluated. */
       readonly ok: true;
       /** The tangles. A step of `cycle` is `[node, edge]`, with the place of the edge in the edges of the node. */
-      readonly tangles: readonly { readonly members: readonly number[]; readonly cycle: readonly (readonly [number, number])[] }[];
+      readonly tangles: readonly {
+        /** The nodes of the tangle, in ascending order. */
+        readonly members: readonly number[];
+        /** A shortest cycle through the first member. */
+        readonly cycle: readonly (readonly [number, number])[];
+      }[];
     }
   | {
       /** The rule cannot be evaluated. */
