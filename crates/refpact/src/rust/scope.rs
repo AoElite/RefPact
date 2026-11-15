@@ -93,6 +93,9 @@ pub(crate) struct Module {
     pub public: bool,
     /// The number of lines of the files and of the inline declarations of the module.
     pub lines: u32,
+    /// The file of the first declaration of the module: its own file, or for an inline
+    /// module the file that has it. `None` before the first declaration is read.
+    pub file: Option<String>,
     /// The `cfg` conditions that every declaration of the module is under, as tags. `None`
     /// before the first declaration is read.
     pub cfg: Option<Vec<String>>,

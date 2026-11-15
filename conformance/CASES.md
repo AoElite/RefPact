@@ -3095,6 +3095,15 @@ Paths are printed with the separator `::`.
 | 2 | `crate::api::http` | `src/api/http.rs:1:1` | use `crate::domain::Order` |  |
 | 3 | `crate::util` | `src/util.rs:1:1` | use `crate::domain::Order` |  |
 
+| unit | file |
+|---|---|
+| `crate` |  |
+| `crate::api` | `src/api/mod.rs` |
+| `crate::api::http` | `src/api/http.rs` |
+| `crate::domain` | `src/domain.rs` |
+| `crate::util` | `src/util.rs` |
+| `crate::orphan` |  |
+
 ### a unit in no place is reported
 
 ```json
@@ -3147,6 +3156,21 @@ Result:
 ```text
 rule `r` is violated in 2 place(s):
   src/util.rs: [r] crate::util is in none of the places of the rule
+  [r] crate::orphan is in none of the places of the rule
+```
+
+### a unit has the file that the fact set gives, then that of its first fact, then none
+
+```json
+{"must_be_in":{"places":["crate::api::**"]},"name":"r","subjects":{"any_of":["crate","crate::domain","crate::orphan"]}}
+```
+
+Result:
+
+```text
+rule `r` is violated in 3 place(s):
+  src/lib.rs: [r] crate is in none of the places of the rule
+  src/domain.rs: [r] crate::domain is in none of the places of the rule
   [r] crate::orphan is in none of the places of the rule
 ```
 

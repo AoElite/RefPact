@@ -527,6 +527,10 @@ fn merge(
         }
         merged.units.extend(facts.units.iter().map(renamed));
         merged.unit_lines.extend(&facts.unit_lines);
+        let files = facts.unit_files.iter();
+        merged
+            .unit_files
+            .extend(files.map(|file| sources::join(&member.dir, file)));
         merged.items.extend(facts.items.iter().map(renamed));
         merged.kinds.clone_from(&facts.kinds);
         merged.markers.clone_from(&facts.markers);

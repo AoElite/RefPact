@@ -323,6 +323,20 @@ fn layers_that_cover_the_crate_and_malformed_layers() {
     assert!(violations
         .iter()
         .all(|violation| violation.detail == Detail::Outside && violation.line == 0));
+    // Each violation has the file of its module, also for a module without a reference.
+    let files: Vec<&str> = violations.iter().map(|found| found.file.as_str()).collect();
+    assert_eq!(
+        files,
+        [
+            "src/dead/mod.rs",
+            "src/dead/inner.rs",
+            "src/features/mod.rs",
+            "src/features/cart.rs",
+            "src/features/pay.rs",
+            "src/features/shared.rs",
+            "src/tools.rs",
+        ]
+    );
     // With a layer for the rest, every module is in a layer.
     let all_in = failed(
         shop()

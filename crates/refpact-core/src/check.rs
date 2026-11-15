@@ -670,8 +670,8 @@ impl<'a> Scope<'a> {
         }
     }
 
-    /// A violation about a unit as a whole: the file is that of the first fact of the unit,
-    /// and the line and column are 0.
+    /// A violation about a unit as a whole: the file is that of the unit, and the line and
+    /// column are 0.
     pub fn violation_of_unit(&self, unit: usize, detail: Detail) -> Violation {
         let path = &self.facts().units[unit];
         Violation::of_unit(self.filters.name, path, self.index, detail)

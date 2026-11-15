@@ -26,16 +26,7 @@ pub(crate) fn units<'c>(limit: u32, setup: &mut Setup) -> Box<dyn Checker + 'c> 
                     lines,
                     limit,
                 };
-                let mut violation = scope.violation_of_unit(unit, detail);
-                if violation.file.is_empty() {
-                    // The unit has no fact. A declaration of the unit names its file.
-                    let mut declared = facts.declarations.iter();
-                    if let Some(declaration) = declared.find(|item| item.unit == facts.units[unit])
-                    {
-                        violation.file.clone_from(&declaration.file);
-                    }
-                }
-                Some(violation)
+                Some(scope.violation_of_unit(unit, detail))
             })
             .collect()
     }))

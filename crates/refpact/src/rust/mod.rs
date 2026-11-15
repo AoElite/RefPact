@@ -223,6 +223,7 @@ fn analyse_tree(
 
     let mut units: Vec<Path> = Vec::new();
     let mut unit_lines: Vec<u32> = Vec::new();
+    let mut unit_files: Vec<String> = Vec::new();
     let mut items: Vec<Path> = Vec::new();
     // The conditions of the modules are tags too, also those of a module without facts.
     let mut tags = vec![TAG_TEST.to_owned(), TAG_GENERATED.to_owned()];
@@ -239,6 +240,7 @@ fn analyse_tree(
         }
         units.push(module.path.clone());
         unit_lines.push(module.lines);
+        unit_files.push(module.file.clone().unwrap_or_default());
         for (name, kind) in &module.names.items {
             let mut path = module.path.clone();
             path.push(name.clone());
@@ -262,6 +264,7 @@ fn analyse_tree(
         separator: "::".to_owned(),
         units,
         unit_lines,
+        unit_files,
         items,
         kinds: to_strings(kind::ALL),
         markers: to_strings(marker::ALL),

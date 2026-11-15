@@ -258,6 +258,7 @@ pub(crate) fn load(
                     names: Names::default(),
                     public: true,
                     lines: 0,
+                    file: None,
                     cfg: None,
                 }],
                 files: Vec::new(),
@@ -487,6 +488,9 @@ impl Loader<'_> {
         let cfg = joined(cfg, &outline.cfg);
         self.narrow(module, &cfg);
         self.modules[module].lines += outline.lines;
+        self.modules[module]
+            .file
+            .get_or_insert_with(|| path.clone());
         let slot = self.files.len();
         self.files.push(None);
         self.depth += 1;
@@ -538,6 +542,7 @@ impl Loader<'_> {
             names: Names::default(),
             public,
             lines: 0,
+            file: None,
             cfg: None,
         });
         self.modules[parent]
@@ -576,6 +581,8 @@ impl Loader<'_> {
                         Some(steps) => {
                             self.narrow(child, &cfg);
                             self.modules[child].lines += lines;
+                            let file = &mut self.modules[child].file;
+                            file.get_or_insert_with(|| context.path.to_owned());
                             inline.push(paths.always.clone().unwrap_or_else(|| name.clone()));
                             self.declare(child, steps, context, inline, test, &cfg)?;
                             inline.pop();

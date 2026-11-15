@@ -48,6 +48,7 @@ FactSet {
   separator   text used to print paths
   units       paths of all units (Rust: modules, TypeScript: files)
   unit_lines  the number of lines of each unit, in the order of `units`; may be empty
+  unit_files  the file of each unit, in the order of `units`; may be empty
   items       paths of all known named things inside units
   kinds       all reference kinds this front end can produce
   markers     all markers this front end can produce
@@ -117,6 +118,12 @@ visibility, such as `async` or `documented`.
 `end_line` has no lines: the front end does not record where the item ends. The *lines* of
 the unit at position `n` of `units` are entry `n` of `unit_lines`. A unit at a position that
 `unit_lines` does not have has no lines. Only the rules of section 4.16 read the lines.
+
+The *file* of the unit at position `n` of `units` is the first of these that there is: entry
+`n` of `unit_files` when it is not empty text, the `file` of the first fact of the unit, the
+`file` of the first declaration of the unit. A unit with none of them has empty text as its
+file. A front end gives `unit_files` so that a unit without a fact and without a declaration
+has its file too.
 
 A fact set is invalid when a fact names a unit that is not in `units`, a kind that is not in
 `kinds`, a marker that is not in `markers`, or a tag that is not in `tags`. It is also invalid
@@ -301,9 +308,8 @@ Each selected unit without a use gives one violation. A unit is thus used when c
 it and outside the units below it refers to it or to a unit below it. The unit of the fact
 does not have to be selected.
 
-The violation has `unit`, and no reference. Its `file` is the `file` of the first fact whose
-unit is `U`, or empty text when no fact has that unit. Its `line` and `column` are 0, and it
-has no `note`.
+The violation has `unit`, and no reference. Its `file` is the file of the unit `U` (section
+3). Its `line` and `column` are 0, and it has no `note`.
 
 ### 4.8 The unit graph and `must_not_reach`
 
@@ -502,9 +508,7 @@ These rules are about the lines of section 3. A limit is a whole number of 0 or 
 
 `must_not_exceed_lines`: each selected unit that has more lines than `lines` gives one
 violation. A unit with exactly `lines` lines gives none, and a unit that has no lines gives
-none. The fields of the violation are as in section 4.7, with one change: when no fact has
-the unit, the `file` is that of the first declaration of the unit, or empty when the unit has
-no declaration.
+none. The fields of the violation are as in section 4.7.
 
 `not_exceed_lines` is a demand of `items` (section 4.12): each selected declaration that has
 more lines than the limit gives one violation, at the place of the declaration. A
@@ -716,7 +720,7 @@ Each file in `cases/` is one object:
 {
   "description": "...",
   "separator": "::",
-  "facts": { "units": [...], "unit_lines": [...], "items": [...], "kinds": [...],
+  "facts": { "units": [...], "unit_lines": [...], "unit_files": [...], "items": [...], "kinds": [...],
              "markers": [...], "tags": [...], "facts": [ fact, ... ] },
   "cases": [ { "name": "...", "rule": rule, "expect": expectation }, ... ]
 }
@@ -725,7 +729,7 @@ Each file in `cases/` is one object:
 - A path or a pattern is a string, which is split at the file's `separator`, or an array of
   segments, which is used as it is. Arrays allow segments that contain the separator, and
   allow invalid patterns to be written.
-- In `facts`, the keys `unit_lines`, `items`, `kinds`, `markers`, `tags` default to `[]`.
+- In `facts`, the keys `unit_lines`, `unit_files`, `items`, `kinds`, `markers`, `tags` default to `[]`.
 - In `facts`, `declarations`, `item_kinds`, `visibilities`, `relations`, `modifiers` and
   `properties` default to `[]`. A declaration is `{ "path", "name", "unit", "file", "line", "column",
   "end_line", "tags", "kind", "visibility", "relations", "modifiers" }`; `column` defaults to
@@ -914,7 +918,7 @@ names the handle, so that a large fact set crosses the boundary once and not for
 
 - A `format` is `{ separator, attachedPrefixes, hiddenPrefixes }`: the path format of a fact
   set. The two lists may be absent.
-- In a fact set, `unitLines`, `declarations`, `itemKinds`, `visibilities`, `relations`,
+- In a fact set, `unitLines`, `unitFiles`, `declarations`, `itemKinds`, `visibilities`, `relations`,
   `modifiers`, `properties`, `attachedPrefixes` and `hiddenPrefixes` may be absent, and so may `tags`,
   `aliases` and `properties` (an object of texts by their names) of a fact and `tags`, `relations` and `modifiers` of a declaration. They are then empty. A `note` may be
   absent or `null`, and so may the `endLine` of a declaration.

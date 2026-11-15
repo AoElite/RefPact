@@ -24,7 +24,7 @@ use refpact::core::{
 use serde_json::{json, Value};
 
 /// The number of cases the directory holds. A harness that runs fewer cases must fail.
-const EXPECTED_CASES: usize = 301;
+const EXPECTED_CASES: usize = 302;
 
 /// The case files in the order of their names: the file name and the content.
 fn case_files() -> Vec<(String, Value)> {
@@ -231,7 +231,7 @@ fn wire_facts(facts: &FactSet) -> Value {
             "modifiers": declaration.modifiers})
     };
     json!({
-        "separator": facts.separator, "units": facts.units, "unitLines": facts.unit_lines,
+        "separator": facts.separator, "units": facts.units, "unitLines": facts.unit_lines, "unitFiles": facts.unit_files,
         "items": facts.items,
         "kinds": facts.kinds, "markers": facts.markers, "tags": facts.tags,
         "facts": facts.facts.iter().map(fact).collect::<Vec<_>>(),
@@ -407,6 +407,7 @@ fn fact_set(json: &Value, separator: &str) -> FactSet {
                 .map(|lines| lines.as_u64().expect("a number of lines") as u32)
                 .collect(),
         },
+        unit_files: strings(&json["unit_files"]),
         items: paths(&json["items"], separator),
         kinds: strings(&json["kinds"]),
         markers: strings(&json["markers"]),
@@ -930,6 +931,22 @@ fn lines_table(facts: &FactSet, separator: &str) -> String {
     text
 }
 
+/// The files of the units of a case file as a markdown table.
+fn files_table(facts: &FactSet, separator: &str) -> String {
+    if facts.unit_files.is_empty() {
+        return String::new();
+    }
+    let mut text = String::from("\n| unit | file |\n|---|---|\n");
+    for (unit, file) in facts.units.iter().zip(&facts.unit_files) {
+        text.push_str(&format!(
+            "| {} | {} |\n",
+            cell(&join(unit, separator)),
+            cell(file)
+        ));
+    }
+    text
+}
+
 fn declarations_table(facts: &FactSet, separator: &str) -> String {
     if facts.declarations.is_empty() {
         return String::new();
@@ -1120,6 +1137,7 @@ fn case_reference() -> String {
         ));
         text.push_str(&facts_table(&facts, separator));
         text.push_str(&lines_table(&facts, separator));
+        text.push_str(&files_table(&facts, separator));
         text.push_str(&declarations_table(&facts, separator));
         for case in json["cases"].as_array().expect("cases") {
             text.push_str(&format!(

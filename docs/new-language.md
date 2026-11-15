@@ -66,6 +66,8 @@ is, how a path is written, and which kinds of reference exist. The core needs:
 - **Lines**, for rules about lengths: the number of lines of each unit, as `unitLines`, and
   the line on which each declaration ends, as `endLine`. A front end that gives neither
   cannot have such rules: the core reports them as `no-subjects`.
+- **Files**, for the reports about a unit as a whole: the file of each unit, as `unitFiles`.
+  Without it, a unit that has no reference and no declaration is reported without a file.
 - **The path format**, when reports should print paths in the language's own way:
   `attachedPrefixes` and `hiddenPrefixes` (SPEC section 3).
 - **Test code.** A tag on facts in test code, so that a rule can leave them out. The Rust

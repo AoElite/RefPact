@@ -220,8 +220,8 @@ fn an_exemption_of_a_check_that_reads_no_references_is_an_error() {
         .map(|violation| violation.unit.join("::"))
         .collect();
     assert_eq!(units, ["crate"]);
-    // The root has no fact, so the violation has no file.
-    assert_eq!((found[0].file.as_str(), found[0].line), ("", 0));
+    // The root has no fact. The violation has the file of the module.
+    assert_eq!((found[0].file.as_str(), found[0].line), ("src/lib.rs", 0));
 }
 
 #[test]

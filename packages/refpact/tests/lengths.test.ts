@@ -57,6 +57,9 @@ function lengths(made: ImportRule): string[] {
 it("the lines of a file are counted, and a line break at the end starts no line", () => {
   expect(lengths(rule("r").files(all()).mustNotExceedLines(1))).toEqual(["src/api.ts 15", "src/short.ts 2"]);
   expect(shop.facts.unitLines).toEqual([15, 0, 2]);
+  // an empty file has no import and no item: a violation about it has its file
+  const placed = rule("the empty file is the api").files(anyOf("src/empty.ts")).mustBeIn(["src/api.ts"]).evaluate(shop);
+  expect(placed.ok && placed.violations.map((violation) => violation.file)).toEqual(["src/empty.ts"]);
 });
 
 it("a file at the limit passes, and a longer file is reported", () => {

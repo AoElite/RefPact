@@ -77,6 +77,12 @@ pub(super) fn fact_set(reader: &mut Reader<'_>) -> Read<FactSet> {
             "unitLines" => {
                 set.unit_lines = at("unitLines", optional_list(reader, |reader| reader.whole()))?;
             }
+            "unitFiles" => {
+                set.unit_files = at(
+                    "unitFiles",
+                    optional_list(reader, |reader| reader.text().map(owned)),
+                )?;
+            }
             "items" => items = Some(at("items", paths(reader))?),
             "kinds" => kinds = Some(at("kinds", strings(reader))?),
             "markers" => markers = Some(at("markers", strings(reader))?),

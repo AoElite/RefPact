@@ -40,7 +40,7 @@ function pathEquals(a: Path, b: Path): boolean {
 }
 
 /** The number of cases the directory holds. A harness that runs fewer cases must fail. */
-const EXPECTED_CASES = 301;
+const EXPECTED_CASES = 302;
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };
@@ -154,6 +154,7 @@ function factSet(json: JsonObject, separator: string): FactSet {
     separator,
     units: paths(json["units"], separator),
     unitLines: list(json["unit_lines"], "unit_lines").map((lines) => number(lines, "unit_lines")),
+    unitFiles: strings(json["unit_files"], "unit_files"),
     items: paths(json["items"], separator),
     kinds: strings(json["kinds"], "kinds"),
     markers: strings(json["markers"], "markers"),

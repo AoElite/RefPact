@@ -14,6 +14,11 @@ export interface FactSet {
   readonly items: readonly Path[];
   /** The number of lines of each unit, in the order of `units`. Absent or empty for front ends that do not count them. */
   readonly unitLines?: readonly number[];
+  /**
+   * The file of each unit, in the order of `units`. Absent or empty for front ends that do
+   * not give them: the file of a unit is then that of its first fact.
+   */
+  readonly unitFiles?: readonly string[];
   /** All reference kinds the front end can produce. */
   readonly kinds: readonly string[];
   /** All markers the front end can produce. */

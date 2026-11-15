@@ -3,6 +3,7 @@
   "separator": "::",
   "facts": {
     "units": ["crate", "crate::api", "crate::api::http", "crate::domain", "crate::util", "crate::orphan"],
+    "unit_files": ["", "src/api/mod.rs", "src/api/http.rs", "src/domain.rs", "src/util.rs", ""],
     "kinds": ["use"],
     "facts": [
       {"unit": "crate", "file": "src/lib.rs", "line": 1, "reference": {"target": "crate::api::http::serve", "kind": "use"}},
@@ -15,6 +16,7 @@
     {"name": "only the selected units must be in a place", "rule": {"name": "r", "subjects": {"all": true, "except": ["crate", "crate::orphan"]}, "must_be_in": {"places": ["crate::api::**", "crate::domain::**"]}}, "expect": {"violations": [{"unit": "crate::util", "detail": "outside"}]}},
     {"name": "places match exactly, and a unit below a place has a note", "rule": {"name": "r", "subjects": {"any_of": ["crate::api::**"]}, "must_be_in": {"places": ["crate::api"]}}, "expect": {"violations": [{"unit": "crate::api::http", "detail": "outside", "note": "a place matches a unit above it: a pattern that ends in `**` also matches the units below"}]}},
     {"name": "a unit below a place has no note when the places divide what is below that place", "rule": {"name": "r", "subjects": {"all": true}, "must_be_in": {"places": ["crate", "crate::api::**", "crate::domain::**"]}}, "expect": {"violations": [{"unit": "crate::util", "detail": "outside", "note": null}, {"unit": "crate::orphan", "detail": "outside", "note": null}]}},
+    {"name": "a unit has the file that the fact set gives, then that of its first fact, then none", "rule": {"name": "r", "subjects": {"any_of": ["crate", "crate::domain", "crate::orphan"]}, "must_be_in": {"places": ["crate::api::**"]}}, "expect": {"violations": [{"unit": "crate", "file": "src/lib.rs"}, {"unit": "crate::domain", "file": "src/domain.rs"}, {"unit": "crate::orphan", "file": ""}]}},
     {"name": "units that are all in places pass", "rule": {"name": "r", "subjects": {"all": true}, "must_be_in": {"places": ["crate", "crate::api::**", "crate::domain", "crate::util", "crate::orphan"]}}, "expect": {"violations": []}},
     {"name": "a baseline accepts a unit outside the places", "rule": {"name": "r", "subjects": {"all": true, "except": ["crate", "crate::orphan"]}, "must_be_in": {"places": ["crate::api::**", "crate::domain::**"]}}, "baseline": "r\tcrate::util\toutside\t1\n", "expect": {"violations": []}},
     {"name": "no places is an error", "rule": {"name": "r", "subjects": {"all": true}, "must_be_in": {"places": []}}, "expect": {"errors": [{"code": "empty-list", "role": "place"}]}},

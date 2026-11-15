@@ -12,6 +12,9 @@ pub struct FactSet {
     /// The number of lines of each unit, in the order of `units`. Empty for front ends that
     /// do not count them.
     pub unit_lines: Vec<u32>,
+    /// The file of each unit, in the order of `units`. Empty for front ends that do not
+    /// give them: the file of a unit is then that of its first fact.
+    pub unit_files: Vec<String>,
     /// Paths of all known named things inside units.
     pub items: Vec<Path>,
     /// All reference kinds the front end can produce.

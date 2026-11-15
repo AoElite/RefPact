@@ -26,10 +26,21 @@ pub struct Violation {
 
 impl Violation {
     /// A violation that is about a unit as a whole and has no place in the source: the
-    /// file is that of the first fact of the unit, and the line and column are 0.
+    /// file is that of the unit (SPEC 4.7), and the line and column are 0.
     pub(crate) fn of_unit(rule: &str, unit: &Path, index: &Index, detail: Detail) -> Violation {
-        let first = index.unit(unit).and_then(|number| index.first_fact(number));
-        let file = first.map(|fact| index.facts.facts[fact].file.clone());
+        let facts = index.facts;
+        let number = index.unit(unit);
+        // The front end says which file the unit has. Without that, a fact or a
+        // declaration of the unit names it.
+        let given = number
+            .and_then(|number| facts.unit_files.get(number))
+            .filter(|file| !file.is_empty());
+        let of_fact = || Some(&facts.facts[index.first_fact(number?)?].file);
+        let declared = || {
+            let mut declarations = facts.declarations.iter();
+            Some(&declarations.find(|item| item.unit == *unit)?.file)
+        };
+        let file = given.or_else(of_fact).or_else(declared).cloned();
         Violation {
             rule: rule.to_owned(),
             unit: unit.clone(),
