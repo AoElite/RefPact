@@ -137,14 +137,16 @@ macro_rules! filter_methods {
             }
 
             /// The references from these modules to these paths are not seen: one known
-            /// dependency that is allowed. Modules match exactly, paths match what is inside
-            /// them, as targets do. For a cycle or a chain, the reference is no edge.
+            /// dependency that is allowed. The modules are a selection as in
+            /// [`modules`](crate::Named::modules): `any_of(..)`, `all()`, `all_except(..)`
+            /// or `any_of(..).except(..)`. Paths match what is inside them, as targets do.
+            /// For a cycle or a chain, the reference is no edge.
             ///
             /// An exemption that lets no reference pass is an error, so it goes when the
             /// code that it allows goes. Call this again for more exemptions.
-            pub fn ignoring_use(self, from: crate::AnyOf, to: crate::AnyOf) -> $type {
+            pub fn ignoring_use(self, from: impl Into<crate::Modules>, to: crate::AnyOf) -> $type {
                 let exemption = crate::core::Exemption {
-                    from: from.split(),
+                    from: crate::subjects(from.into()),
                     to: to.split(),
                 };
                 let filter = crate::filters::Filter::Exempt(exemption);

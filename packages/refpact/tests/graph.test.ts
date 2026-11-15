@@ -8,7 +8,7 @@ import { scratchDirectory } from "./scratch.ts";
 
 import { symlinkSync } from "node:fs";
 import { all, allExcept, anyOf, ArchitectureError, baseline, layers, loadProject, onionArchitecture, pkg, rule, rules } from "../src/index.ts";
-import type { Failure, ImportRule, Layers, Project, Violation } from "../src/index.ts";
+import type { AnyOf, Failure, ImportRule, Layers, Project, Violation } from "../src/index.ts";
 
 const scratch = scratchDirectory("refpact-graph-");
 
@@ -338,6 +338,19 @@ it("exemptions", () => {
       .verify(shop);
     expect(unused?.type).toBe("invalid");
     expect(unused?.message).toContain("exemption `src/domain/order.ts -> src/ui/**` lets no reference pass");
+
+    // the files of an exemption are a selection, as the files of a rule are
+    expect(uses(domain().ignoringImport(all(), anyOf("src/ui/routes.ts")))).toHaveLength(1);
+    expect(uses(domain().ignoringImport(allExcept("src/domain/order.ts"), anyOf("src/ui/routes.ts")))).toHaveLength(1);
+    const excepted = domain().ignoringImport(anyOf("src/domain/**").except("src/domain/price.ts"), anyOf("src/ui/**")).verify(shop);
+    expect(excepted?.message).toContain("exemption `src/domain/** except src/domain/price.ts -> src/ui/**` lets no reference pass");
+
+    // without the types: packages are no files, and a selection is no list of targets
+    const wrong = [anyOf(pkg("node:fs")) as unknown as AnyOf<string>, anyOf("**")];
+    const targets = [anyOf("src/ui/**"), all() as unknown as AnyOf];
+    wrong.forEach((from, index) => {
+      expect(() => domain().ignoringImport(from, targets[index] as AnyOf)).toThrow("takes a selection of files as in files(..)");
+    });
   }
 
   // an exempt import is no edge of a cycle

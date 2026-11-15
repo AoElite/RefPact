@@ -121,6 +121,8 @@ pub enum Role {
     User,
     /// A pattern of the units of an exemption.
     ExemptionFrom,
+    /// An exception of the units of an exemption.
+    ExemptionException,
     /// A pattern of the paths of an exemption.
     ExemptionTo,
     /// An exemption.
@@ -151,7 +153,7 @@ pub enum Role {
 
 impl Role {
     /// Every role.
-    pub(crate) const ALL: [Role; 26] = [
+    pub(crate) const ALL: [Role; 27] = [
         Role::Unit,
         Role::Subject,
         Role::SubjectException,
@@ -165,6 +167,7 @@ impl Role {
         Role::Place,
         Role::User,
         Role::ExemptionFrom,
+        Role::ExemptionException,
         Role::ExemptionTo,
         Role::Exemption,
         Role::Name,
@@ -196,6 +199,7 @@ impl Role {
             Role::Place => "place",
             Role::User => "user",
             Role::ExemptionFrom => "exemption-from",
+            Role::ExemptionException => "exemption-exception",
             Role::ExemptionTo => "exemption-to",
             Role::Exemption => "exemption",
             Role::Name => "name",

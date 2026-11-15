@@ -71,17 +71,17 @@ impl Severity {
     }
 }
 
-/// References that a rule does not see (SPEC 4.13): those of the units that a `from`
-/// pattern matches exactly, with a path that a `to` pattern matches within.
+/// References that a rule does not see (SPEC 4.13): those of the units that `from`
+/// selects, with a path that a `to` pattern matches within.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Exemption {
-    /// The units. An empty list is an error.
-    pub from: Vec<RawPattern>,
+    /// The units, selected as the subjects of a rule are.
+    pub from: Subjects,
     /// The paths. An empty list is an error.
     pub to: Vec<RawPattern>,
 }
 
-/// Which units a rule applies to.
+/// A selection of units: those a rule applies to, or those of an exemption.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Subjects {
     /// The units that are selected before the exceptions.

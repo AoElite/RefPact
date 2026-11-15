@@ -170,7 +170,7 @@ Rule {
   kinds         all | only [kind] | except [kind]      (default all)
   ignore_tags   [tag]                                  (default empty)
   candidates    include | ignore                       (default include)
-  exemptions    [{ from: [pattern], to: [pattern] }]   (default empty)
+  exemptions    [{ from: { include, except }, to: [pattern] }]   (default empty; `from` is as `subjects`)
   properties    [name]                                 (default empty)
 }
 ```
@@ -423,8 +423,10 @@ and `candidates` apply, and so do the exemptions.
 ### 4.13 Exemptions
 
 An exemption lets some references pass that the rule would otherwise see. A reference fact is
-*exempt* when, for at least one exemption, a `from` pattern matches the fact's unit exactly
-and a `to` pattern matches within at least one path in `[target, aliases...]`.
+*exempt* when, for at least one exemption, `from` selects the fact's unit and a `to` pattern
+matches within at least one path in `[target, aliases...]`. The `from` of an exemption selects
+units as the `subjects` of a rule do (section 4.1): the units that an `include` pattern
+matches exactly, or all units, minus those that an `except` pattern matches exactly.
 
 Wherever this specification applies check 2 of section 4.2, an exempt fact fails it as well:
 the rule does not see the fact. This holds for every constraint that reads references, also
@@ -658,9 +660,12 @@ Then the rule:
 | 11 | a kind of the filter is not in the fact set's `kinds` | `unknown-kind` | `kind` | kind |
 | 12 | a tag of `ignore_tags` is not in the fact set's `tags` | `unknown-tag` | `tag` | tag |
 | 12 | a name of `properties` is not in the fact set's `properties` | `unknown-property` | `property` | name |
-| 13 | an exemption has `from: []` | `empty-list` | `exemption-from` | |
-| 13 | a `from` pattern is invalid | `invalid-pattern` | `exemption-from` | pattern |
-| 13 | a `from` pattern matches no unit | `pattern-matches-nothing` | `exemption-from` | pattern |
+| 13 | the `include` of a `from` is `any_of []` | `empty-list` | `exemption-from` | |
+| 13 | an `include` pattern of a `from` is invalid | `invalid-pattern` | `exemption-from` | pattern |
+| 13 | an `include` pattern of a `from` matches no unit | `pattern-matches-nothing` | `exemption-from` | pattern |
+| 13 | the `except` of a `from` is `[]` | `empty-list` | `exemption-exception` | |
+| 13 | an exception of a `from` is invalid | `invalid-pattern` | `exemption-exception` | pattern |
+| 13 | an exception of a `from` matches no unit | `pattern-matches-nothing` | `exemption-exception` | pattern |
 | 13 | an exemption has `to: []` | `empty-list` | `exemption-to` | |
 | 13 | a `to` pattern is invalid | `invalid-pattern` | `exemption-to` | pattern |
 | 13 | a `to` pattern is internal and not grounded (section 5.1) | `pattern-matches-nothing` | `exemption-to` | pattern |
@@ -673,9 +678,12 @@ says what a name must look like. "(uses)" means
 `must_be_independent` has the checks of `must_be_acyclic`; its `slices` are never `none`,
 and its nodes are the slices of the selected units. `must_be_used` has no check of its own.
 
-Check 13 runs for each exemption in order, first on its `from` list and then on its `to`
-list. Check 14 gives one error for each exemption that is not used, in order. Its value is
-the `from` patterns, then ` -> `, then the `to` patterns, each list joined with `, `.
+Check 13 runs for each exemption in order: first on the `include` of its `from`, then on the
+`except` of its `from`, and then on its `to` list. A `from` that selects no unit gives no
+error of its own: its exemption is not used. Check 14 gives one error for each exemption
+that is not used, in order. Its value is the `from`, then ` -> `, then the `to` patterns.
+The `from` is its `include` patterns, or `all`, and then ` except ` and its exceptions when
+it has them. Each list is joined with `, `: `all except a::b -> c, d`.
 
 A graph with fewer than two nodes cannot have a cycle, and one slice cannot use another, so
 those rules cannot fail. A root is never a violation of `must_be_reachable_from`, so a rule
@@ -759,7 +767,7 @@ Each file in `cases/` is one object:
     "kinds": { "only": [...] } | { "except": [...] }
     "ignore_tags": [...],
     "candidates": "include" | "ignore",
-    "exemptions": [{ "from": [pattern, ...], "to": [pattern, ...] }, ...],
+    "exemptions": [{ "from": as "subjects", "to": [pattern, ...] }, ...],
     "properties": [name, ...] }
   ```
 
@@ -912,7 +920,7 @@ names the handle, so that a large fact set crosses the boundary once and not for
   absent or `null`, and so may the `endLine` of a declaration.
 - In a rule, `kinds` (default `{ "type": "all" }`), `ignoreTags`, `candidates` (default
   `"include"`), `severity` (default `"error"`), `exemptions`, `properties` and the `except` of `subjects`
-  may be absent, and so may `unverified` of targets, `named`, `kinds`, `visibilities`,
+  and of the `from` of an exemption may be absent, and so may `unverified` of targets, `named`, `kinds`, `visibilities`,
   `related` and `modifiers` of `items`, and
   `targets` and `units` of a `custom` check.
 - An error has `code`, and `role` and `value` when it has them. A violation has `note` when it

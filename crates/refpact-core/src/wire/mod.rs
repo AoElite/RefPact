@@ -436,21 +436,9 @@ fn severity(value: &Value) -> Read<Severity> {
 
 /// A rule, with its constraint read by `constraint`.
 fn rule_with(value: &Value, constraint: impl Fn(&Value) -> Read<Constraint>) -> Read<Rule> {
-    let include = get(value, "subjects", |subjects| {
-        get(subjects, "include", |include| {
-            match tag(include)?.as_str() {
-                "all" => Ok(Include::All),
-                "any-of" => Ok(Include::AnyOf(get(include, "patterns", patterns)?)),
-                other => Err(context("type", unknown("include", other))),
-            }
-        })
-    })?;
-    let except = get(value, "subjects", |subjects| {
-        optional(subjects, "except", patterns)
-    })?;
     let mut rule = Rule::new(
         get(value, "name", string)?,
-        Subjects { include, except },
+        get(value, "subjects", subjects)?,
         get(value, "constraint", constraint)?,
     );
     if let Some(kinds) = optional(value, "kinds", |kinds| match tag(kinds)?.as_str() {
@@ -476,11 +464,22 @@ fn rule_with(value: &Value, constraint: impl Fn(&Value) -> Read<Constraint>) -> 
     }
     rule.exemptions = list_or_empty(value, "exemptions", |exemption| {
         Ok(Exemption {
-            from: get(exemption, "from", patterns)?,
+            from: get(exemption, "from", subjects)?,
             to: get(exemption, "to", patterns)?,
         })
     })?;
     Ok(rule)
+}
+
+/// A selection of units: the subjects of a rule, or the units of an exemption.
+fn subjects(value: &Value) -> Read<Subjects> {
+    let include = get(value, "include", |include| match tag(include)?.as_str() {
+        "all" => Ok(Include::All),
+        "any-of" => Ok(Include::AnyOf(get(include, "patterns", patterns)?)),
+        other => Err(context("type", unknown("include", other))),
+    })?;
+    let except = optional(value, "except", patterns)?;
+    Ok(Subjects { include, except })
 }
 
 fn constraint(value: &Value) -> Read<Constraint> {

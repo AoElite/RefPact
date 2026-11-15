@@ -17,7 +17,7 @@ import type {
 import { ItemScope, Scope } from "./custom.ts";
 import { addFilters } from "./filters.ts";
 import type { Filter, Filters } from "./filters.ts";
-import { filePattern, targetPattern } from "./patterns.ts";
+import { filePattern, subjects, targetPattern } from "./patterns.ts";
 import type { ListNames } from "./custom.ts";
 import { KINDS, MARKERS } from "./frontend/imports.ts";
 import { ItemSelection } from "./items.ts";
@@ -443,14 +443,6 @@ function customCheck(patterns: CheckPatterns | undefined): { constraint: CustomC
 export interface Finder {
   readonly names: ListNames;
   readonly find: (scope: Scope, project: Project) => readonly Violation[];
-}
-
-/** The subjects of a rule about these files. */
-function subjects(files: Files): CoreRule["subjects"] {
-  return {
-    include: files.include === undefined ? { type: "all" } : { type: "any-of", patterns: files.include.map(filePattern) },
-    ...(files.excluded !== undefined ? { except: files.excluded.map(filePattern) } : {}),
-  };
 }
 
 /** The rules about `package.json` look at the imports of packages: the hit of an import is its package. */

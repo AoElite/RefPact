@@ -233,6 +233,7 @@ pub fn render_error(error: &RuleError) -> String {
         Some(Role::Place) => "place pattern",
         Some(Role::User) => "user pattern",
         Some(Role::ExemptionFrom) => "exemption unit pattern",
+        Some(Role::ExemptionException) => "exemption exception",
         Some(Role::ExemptionTo) => "exemption target pattern",
         Some(Role::Exemption) => "exemption",
         Some(Role::Name) => "name",

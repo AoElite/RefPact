@@ -504,8 +504,9 @@ impl Scoped {
     }
 }
 
-/// The subjects of a rule about these modules.
-fn subjects(modules: Modules) -> Subjects {
+/// These modules as a selection of the core: the subjects of a rule, or the modules of an
+/// exemption.
+pub(crate) fn subjects(modules: Modules) -> Subjects {
     let patterns = |list: Vec<String>| list.iter().map(|pattern| split(pattern)).collect();
     Subjects {
         include: match modules.include {

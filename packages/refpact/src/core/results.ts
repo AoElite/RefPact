@@ -268,6 +268,7 @@ export type Role =
   | "place"
   | "user"
   | "exemption-from"
+  | "exemption-exception"
   | "exemption-to"
   | "exemption"
   | "name"

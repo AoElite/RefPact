@@ -163,17 +163,17 @@ export interface Rule {
 }
 
 /**
- * References that a rule does not see (SPEC 4.13): those of the units that a `from` pattern
- * matches exactly, with a path that a `to` pattern matches within.
+ * References that a rule does not see (SPEC 4.13): those of the units that `from` selects,
+ * with a path that a `to` pattern matches within.
  */
 export interface Exemption {
-  /** The units. An empty list is an error. */
-  readonly from: readonly RawPattern[];
+  /** The units, selected as the subjects of a rule are. */
+  readonly from: Subjects;
   /** The paths. An empty list is an error. */
   readonly to: readonly RawPattern[];
 }
 
-/** Which units a rule applies to. */
+/** A selection of units: those a rule applies to, or those of an exemption. */
 export interface Subjects {
   /** The units that are selected before the exceptions. */
   readonly include: Include;

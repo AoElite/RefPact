@@ -316,7 +316,8 @@ rule("the ui does not reach the file system")
 - **Exemptions.** `ignoringImport(anyOf("src/config.ts"), anyOf(pkg("node:fs")))` lets the
   imports of `node:fs` in `src/config.ts` pass, as
   [`ignoring_use`](rust.md#exemptions) does in Rust. An exemption that lets no import pass is
-  an error.
+  an error. The files are a selection, as the files of a rule are: `anyOf(..)`, `all()`,
+  `allExcept(..)` or `anyOf(..).except(..)`.
 - **Only some files may import a file.** `rule("only the domain imports the db")
   .files(anyOf("src/db/**")).mustOnlyBeImportedBy(anyOf("src/domain/**"))` works as
   [`must_only_be_used_by`](rust.md#only-some-modules-may-use-a-module). An import through a

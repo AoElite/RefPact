@@ -3377,7 +3377,7 @@ Paths are printed with the separator `::`.
 ### an exempt reference is not a violation
 
 ```json
-{"exemptions":[{"from":["crate::config"],"to":["std::fs::read_to_string"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
+{"exemptions":[{"from":{"any_of":["crate::config"]},"to":["std::fs::read_to_string"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
 ```
 
 Result:
@@ -3392,7 +3392,7 @@ rule `r` is violated in 3 place(s):
 ### an exemption needs both its unit and its path
 
 ```json
-{"exemptions":[{"from":["crate::config"],"to":["std::fs::read_to_string"]},{"from":["crate::ui"],"to":["std::fs::read_to_string","std::fs::write"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
+{"exemptions":[{"from":{"any_of":["crate::config"]},"to":["std::fs::read_to_string"]},{"from":{"any_of":["crate::ui"]},"to":["std::fs::read_to_string","std::fs::write"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
 ```
 
 Result:
@@ -3406,7 +3406,7 @@ rule `r` is violated in 2 place(s):
 ### the path of an exemption can be any path of the reference
 
 ```json
-{"exemptions":[{"from":["crate::ui"],"to":["crate::config"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"any_of":["crate::ui"]}}
+{"exemptions":[{"from":{"any_of":["crate::ui"]},"to":["crate::config"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"any_of":["crate::ui"]}}
 ```
 
 Result:
@@ -3416,10 +3416,53 @@ rule `r` is violated in 1 place(s):
   src/ui.rs:1:1: [r] crate::ui uses std::fs::write (expr)
 ```
 
+### an exemption of all units
+
+```json
+{"exemptions":[{"from":{"all":true},"to":["std::fs::write"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
+```
+
+Result:
+
+```text
+rule `r` is violated in 3 place(s):
+  src/config.rs:1:1: [r] crate::config uses std::fs::read_to_string (expr)
+  src/config.rs:2:1: [r] crate::config uses std::fs::read (expr)
+  src/ui.rs:3:1: [r] crate::ui uses std::fs::File (use, written as crate::config::open)
+```
+
+### an exception takes units out of an exemption
+
+```json
+{"exemptions":[{"from":{"any_of":["crate::config","crate::ui"],"except":["crate::ui"]},"to":["std::fs"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
+```
+
+Result:
+
+```text
+rule `r` is violated in 2 place(s):
+  src/ui.rs:1:1: [r] crate::ui uses std::fs::write (expr)
+  src/ui.rs:3:1: [r] crate::ui uses std::fs::File (use, written as crate::config::open)
+```
+
+### an exemption whose exceptions leave no reference is an error
+
+```json
+{"exemptions":[{"from":{"all":true,"except":["crate::config"]},"to":["std::fs::read_to_string"]},{"from":{"any_of":["crate::config","crate::ui"],"except":["crate::ui"]},"to":["std::fs::write"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
+```
+
+Result:
+
+```text
+rule `r` cannot be checked:
+  exemption `all except crate::config -> std::fs::read_to_string` lets no reference pass; remove it
+  exemption `crate::config, crate::ui except crate::ui -> std::fs::write` lets no reference pass; remove it
+```
+
 ### an exemption takes an edge out of a cycle
 
 ```json
-{"exemptions":[{"from":["crate::b"],"to":["crate::a"]}],"must_be_acyclic":{},"name":"r","subjects":{"any_of":["crate::a","crate::b"]}}
+{"exemptions":[{"from":{"any_of":["crate::b"]},"to":["crate::a"]}],"must_be_acyclic":{},"name":"r","subjects":{"any_of":["crate::a","crate::b"]}}
 ```
 
 Result:
@@ -3446,7 +3489,7 @@ rule `r` is violated in 1 place(s):
 ### an exempt reference is not a use
 
 ```json
-{"exemptions":[{"from":["crate::a"],"to":["crate::b"]}],"must_be_used":{},"name":"r","subjects":{"any_of":["crate::a","crate::b"]}}
+{"exemptions":[{"from":{"any_of":["crate::a"]},"to":["crate::b"]}],"must_be_used":{},"name":"r","subjects":{"any_of":["crate::a","crate::b"]}}
 ```
 
 Result:
@@ -3459,7 +3502,7 @@ rule `r` is violated in 1 place(s):
 ### an exempt reference is not an edge of a chain
 
 ```json
-{"exemptions":[{"from":["crate::b"],"to":["crate::a"]}],"must_not_reach":{"any_of":["crate::b::f"]},"name":"r","subjects":{"any_of":["crate::b"]}}
+{"exemptions":[{"from":{"any_of":["crate::b"]},"to":["crate::a"]}],"must_not_reach":{"any_of":["crate::b::f"]},"name":"r","subjects":{"any_of":["crate::b"]}}
 ```
 
 Result:
@@ -3471,7 +3514,7 @@ No violation.
 ### an exempt reference is not the end of a chain
 
 ```json
-{"exemptions":[{"from":["crate::a"],"to":["crate::b::f"]}],"must_not_reach":{"any_of":["crate::b::f"]},"name":"r","subjects":{"any_of":["crate::a"]}}
+{"exemptions":[{"from":{"any_of":["crate::a"]},"to":["crate::b::f"]}],"must_not_reach":{"any_of":["crate::b::f"]},"name":"r","subjects":{"any_of":["crate::a"]}}
 ```
 
 Result:
@@ -3483,7 +3526,7 @@ No violation.
 ### an exemption applies to the users of a unit
 
 ```json
-{"exemptions":[{"from":["crate::a"],"to":["crate::b::f"]}],"must_only_be_used_by":{"users":["crate::ui"]},"name":"r","subjects":{"any_of":["crate::b"]}}
+{"exemptions":[{"from":{"any_of":["crate::a"]},"to":["crate::b::f"]}],"must_only_be_used_by":{"users":["crate::ui"]},"name":"r","subjects":{"any_of":["crate::b"]}}
 ```
 
 Result:
@@ -3495,7 +3538,7 @@ No violation.
 ### an exemption that lets no reference pass is an error
 
 ```json
-{"exemptions":[{"from":["crate::config"],"to":["std::fs::read_to_string"]},{"from":["crate::config","crate::a"],"to":["std::fs::write","std::net"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
+{"exemptions":[{"from":{"any_of":["crate::config"]},"to":["std::fs::read_to_string"]},{"from":{"any_of":["crate::config","crate::a"]},"to":["std::fs::write","std::net"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
 ```
 
 Result:
@@ -3508,7 +3551,7 @@ rule `r` cannot be checked:
 ### an exemption counts only references that pass the filters
 
 ```json
-{"exemptions":[{"from":["crate::config"],"to":["std::fs::read"]}],"ignore_tags":["test"],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
+{"exemptions":[{"from":{"any_of":["crate::config"]},"to":["std::fs::read"]}],"ignore_tags":["test"],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
 ```
 
 Result:
@@ -3521,7 +3564,7 @@ rule `r` cannot be checked:
 ### a rule about markers has no use for an exemption
 
 ```json
-{"exemptions":[{"from":["crate::ui"],"to":["std::fs::write"]}],"must_not_contain":["unsafe"],"name":"r","subjects":{"all":true}}
+{"exemptions":[{"from":{"any_of":["crate::ui"]},"to":["std::fs::write"]}],"must_not_contain":["unsafe"],"name":"r","subjects":{"all":true}}
 ```
 
 Result:
@@ -3534,7 +3577,7 @@ rule `r` cannot be checked:
 ### a baseline applies after the exemptions
 
 ```json
-{"exemptions":[{"from":["crate::config","crate::ui"],"to":["std::fs::read_to_string","std::fs::File"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
+{"exemptions":[{"from":{"any_of":["crate::config","crate::ui"]},"to":["std::fs::read_to_string","std::fs::File"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
 ```
 
 Baseline:
@@ -3553,7 +3596,7 @@ No violation.
 ### empty lists in an exemption are errors
 
 ```json
-{"exemptions":[{"from":[],"to":[]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
+{"exemptions":[{"from":{"any_of":[],"except":[]},"to":[]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
 ```
 
 Result:
@@ -3561,13 +3604,14 @@ Result:
 ```text
 rule `r` cannot be checked:
   the exemption unit pattern list is empty
+  the exemption exception list is empty
   the exemption target pattern list is empty
 ```
 
 ### patterns of an exemption that match nothing are errors
 
 ```json
-{"exemptions":[{"from":["crate::nothing",["a**"]],"to":["crate::config::shut",["b**"],"std::anything"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
+{"exemptions":[{"from":{"any_of":["crate::nothing",["a**"]],"except":["crate::nowhere"]},"to":["crate::config::shut",["b**"],"std::anything"]}],"must_not_use":{"any_of":["std::fs"]},"name":"r","subjects":{"all":true}}
 ```
 
 Result:
@@ -3576,6 +3620,7 @@ Result:
 rule `r` cannot be checked:
   exemption unit pattern `crate::nothing` matches nothing in the analysed code
   exemption unit pattern `a**` is not a valid pattern
+  exemption exception `crate::nowhere` matches nothing in the analysed code
   exemption target pattern `crate::config::shut` matches nothing in the analysed code
   exemption target pattern `b**` is not a valid pattern
 ```
@@ -3934,7 +3979,7 @@ rule `r` cannot be checked:
 ### an exemption has no use in a rule about items
 
 ```json
-{"exemptions":[{"from":["crate::api"],"to":["crate::domain"]}],"items":{"must":"not_exist"},"name":"r","subjects":{"all":true}}
+{"exemptions":[{"from":{"any_of":["crate::api"]},"to":["crate::domain"]}],"items":{"must":"not_exist"},"name":"r","subjects":{"all":true}}
 ```
 
 Result:
@@ -4125,7 +4170,7 @@ rule `r` is violated in 1 place(s):
 ### an exemption lets a reference inside an item pass
 
 ```json
-{"exemptions":[{"from":["crate::db"],"to":["crate::db::Pool"]}],"items":{"must":{"not_use":{"any_of":["crate::db"]}},"named":["Order"]},"name":"r","subjects":{"all":true}}
+{"exemptions":[{"from":{"any_of":["crate::db"]},"to":["crate::db::Pool"]}],"items":{"must":{"not_use":{"any_of":["crate::db"]}},"named":["Order"]},"name":"r","subjects":{"all":true}}
 ```
 
 Result:
@@ -4683,7 +4728,7 @@ flowchart LR
 ### an exemption takes its edge away
 
 ```json
-{"exemptions":[{"from":["crate::db"],"to":["crate::api"]}],"must_be_acyclic":{},"name":"r","subjects":{"any_of":["crate::api","crate::db"]}}
+{"exemptions":[{"from":{"any_of":["crate::db"]},"to":["crate::api"]}],"must_be_acyclic":{},"name":"r","subjects":{"any_of":["crate::api","crate::db"]}}
 ```
 
 The case asks for the diagram in `mermaid`.

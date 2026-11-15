@@ -433,6 +433,21 @@ fn exemptions() {
         )
         .check(&LAYERED);
 
+    // The modules of an exemption are a selection, as the modules of a rule are.
+    domain()
+        .ignoring_use(all(), any_of(["crate::api::http::ROUTE"]))
+        .check(&LAYERED);
+    let excepted = domain()
+        .ignoring_use(
+            any_of(["crate::domain::**"]).except(["crate::domain::price"]),
+            any_of(["crate::api"]),
+        )
+        .verify(&LAYERED)
+        .unwrap_err();
+    assert!(excepted.to_string().contains(
+        "exemption `crate::domain::** except crate::domain::price -> crate::api` lets no reference pass"
+    ));
+
     let cycles = || {
         rule("the parts form no cycle")
             .modules(all())

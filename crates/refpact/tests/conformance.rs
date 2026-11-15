@@ -24,7 +24,7 @@ use refpact::core::{
 use serde_json::{json, Value};
 
 /// The number of cases the directory holds. A harness that runs fewer cases must fail.
-const EXPECTED_CASES: usize = 298;
+const EXPECTED_CASES: usize = 301;
 
 /// The case files in the order of their names: the file name and the content.
 fn case_files() -> Vec<(String, Value)> {
@@ -297,10 +297,6 @@ fn wire_rule(rule: &Rule) -> Value {
         }
         Constraint::Custom(_) => unreachable!("a case is plain data"),
     };
-    let include = match &rule.subjects.include {
-        Include::All => json!({"type": "all"}),
-        Include::AnyOf(patterns) => json!({"type": "any-of", "patterns": patterns}),
-    };
     let kinds = match &rule.kinds {
         KindFilter::All => json!({"type": "all"}),
         KindFilter::Only(kinds) => json!({"type": "only", "kinds": kinds}),
@@ -310,13 +306,13 @@ fn wire_rule(rule: &Rule) -> Value {
         "name": rule.name,
         "reason": rule.reason,
         "severity": rule.severity.as_str(),
-        "subjects": {"include": include, "except": rule.subjects.except},
+        "subjects": selection(&rule.subjects),
         "constraint": constraint,
         "kinds": kinds,
         "ignoreTags": rule.ignore_tags,
         "properties": rule.properties,
         "candidates": match rule.candidates { Candidates::Include => "include", Candidates::Ignore => "ignore" },
-        "exemptions": rule.exemptions.iter().map(|exemption| json!({"from": exemption.from, "to": exemption.to})).collect::<Vec<_>>(),
+        "exemptions": rule.exemptions.iter().map(|exemption| json!({"from": selection(&exemption.from), "to": exemption.to})).collect::<Vec<_>>(),
     })
 }
 
@@ -528,17 +524,30 @@ fn items(json: &Value, separator: &str) -> Items {
     }
 }
 
-fn rule(json: &Value, separator: &str) -> Rule {
-    let subjects = &json["subjects"];
-    let include = match (&subjects["all"], &subjects["any_of"]) {
+/// A selection of units of a case: the subjects of a rule, or the units of an exemption.
+fn subjects(json: &Value, separator: &str) -> Subjects {
+    let include = match (&json["all"], &json["any_of"]) {
         (Value::Bool(true), Value::Null) => Include::All,
         (Value::Null, list @ Value::Array(_)) => Include::AnyOf(paths(list, separator)),
-        _ => panic!("subjects have exactly one of `all: true` and `any_of`"),
+        _ => panic!("a selection has exactly one of `all: true` and `any_of`"),
     };
-    let except = match &subjects["except"] {
+    let except = match &json["except"] {
         Value::Null => None,
         list => Some(paths(list, separator)),
     };
+    Subjects { include, except }
+}
+
+/// A selection of units as the wire protocol writes it.
+fn selection(subjects: &Subjects) -> Value {
+    let include = match &subjects.include {
+        Include::All => json!({"type": "all"}),
+        Include::AnyOf(patterns) => json!({"type": "any-of", "patterns": patterns}),
+    };
+    json!({"include": include, "except": subjects.except})
+}
+
+fn rule(json: &Value, separator: &str) -> Rule {
     let targets = |value: &Value| targets(value, separator);
     const KEYS: [&str; 12] = [
         "must_not_use",
@@ -598,7 +607,7 @@ fn rule(json: &Value, separator: &str) -> Rule {
             Some("warning") => Severity::Warning,
             Some(other) => panic!("unknown severity {other}"),
         },
-        subjects: Subjects { include, except },
+        subjects: subjects(&json["subjects"], separator),
         constraint,
         kinds,
         ignore_tags: strings(&json["ignore_tags"]),
@@ -615,7 +624,7 @@ fn rule(json: &Value, separator: &str) -> Rule {
                 .expect("exemptions is a list")
                 .iter()
                 .map(|exemption| Exemption {
-                    from: paths(&exemption["from"], separator),
+                    from: subjects(&exemption["from"], separator),
                     to: paths(&exemption["to"], separator),
                 })
                 .collect(),

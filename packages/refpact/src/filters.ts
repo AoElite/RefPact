@@ -7,8 +7,8 @@
  */
 import type { Rule as CoreRule } from "./core/index.ts";
 import type { Kind } from "./frontend/imports.ts";
-import { filePattern, targetPattern } from "./patterns.ts";
-import type { AnyOf } from "./rules.ts";
+import { subjects, targetPattern } from "./patterns.ts";
+import type { AnyOf, Files } from "./rules.ts";
 
 /** One filter, as a value that a set of rules keeps until its rules are made. @internal */
 export interface Filter {
@@ -64,13 +64,14 @@ export interface Filters<Self> {
 
   /**
    * The imports from these files of these targets are not seen: one known import that is
-   * allowed. Files match as the files of a rule do; targets as in `mustNotImport`. For a
+   * allowed. The files are a selection as in `files(..)`: `anyOf(..)`, `all()`,
+   * `allExcept(..)` or `anyOf(..).except(..)`. The targets are as in `mustNotImport`. For a
    * cycle or a chain, the import is no edge.
    *
    * An exemption that lets no import pass is an error, so it goes when the code that it
    * allows goes. Call this again for more exemptions.
    */
-  ignoringImport(from: AnyOf<string>, to: AnyOf): Self;
+  ignoringImport(from: AnyOf<string> | Files, to: AnyOf): Self;
 }
 
 const about = (apply: Filter["apply"]): Filter => ({ aboutImports: true, apply });
@@ -96,7 +97,13 @@ const methods: Filters<unknown> & ThisType<Filtered<unknown>> = {
     return this.filtered(about((rule) => ({ ...rule, kinds: { type: "except", kinds: ["import-type", "export-type-from"] } })));
   },
   ignoringImport(from, to) {
-    const exemption = { from: from.patterns.map(filePattern), to: to.patterns.map(targetPattern) };
+    // Without the types, anything gets here: packages as the files, or a selection as the targets.
+    const files = "patterns" in from ? { include: from.patterns, excluded: undefined } : from;
+    const lists: readonly unknown[] = [files.include ?? [], files.excluded ?? [], to.patterns];
+    if (!lists.every(Array.isArray) || [files.include, files.excluded].some((list) => list?.some((pattern) => typeof pattern !== "string"))) {
+      throw new TypeError("refpact: ignoringImport(..) takes a selection of files as in files(..), then anyOf(..) of targets");
+    }
+    const exemption = { from: subjects(files), to: to.patterns.map(targetPattern) };
     return this.filtered(about((rule) => ({ ...rule, exemptions: [...(rule.exemptions ?? []), exemption] })));
   },
 };

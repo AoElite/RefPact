@@ -19,6 +19,7 @@ import {
   type Fact,
   type FactSet,
   type Include,
+  type Subjects,
   type KindFilter,
   type Path,
   type Rule,
@@ -39,7 +40,7 @@ function pathEquals(a: Path, b: Path): boolean {
 }
 
 /** The number of cases the directory holds. A harness that runs fewer cases must fail. */
-const EXPECTED_CASES = 298;
+const EXPECTED_CASES = 301;
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };
@@ -234,18 +235,22 @@ function items(json: JsonObject, separator: string): Items {
   };
 }
 
-function rule(json: JsonObject, separator: string): Rule {
-  const subjects = object(json["subjects"], "subjects");
+/** A selection of units of a case: the subjects of a rule, or the units of an exemption. */
+function subjects(value: Json | undefined, separator: string): Subjects {
+  const json = object(value, "a selection");
   let include: Include;
-  if (subjects["all"] === true && subjects["any_of"] === undefined) {
+  if (json["all"] === true && json["any_of"] === undefined) {
     include = { type: "all" };
-  } else if (subjects["all"] === undefined && Array.isArray(subjects["any_of"])) {
-    include = { type: "any-of", patterns: paths(subjects["any_of"], separator) };
+  } else if (json["all"] === undefined && Array.isArray(json["any_of"])) {
+    include = { type: "any-of", patterns: paths(json["any_of"], separator) };
   } else {
-    throw new Error("subjects have exactly one of `all: true` and `any_of`");
+    throw new Error("a selection has exactly one of `all: true` and `any_of`");
   }
-  const except = subjects["except"];
+  const except = json["except"];
+  return { include, ...(except !== undefined && { except: paths(except, separator) }) };
+}
 
+function rule(json: JsonObject, separator: string): Rule {
   let constraint: Constraint;
   const KEYS = [
     "must_not_use",
@@ -330,7 +335,7 @@ function rule(json: JsonObject, separator: string): Rule {
     name: string(json["name"], "rule name"),
     ...(json["reason"] !== undefined && { reason: string(json["reason"], "reason") }),
     ...(json["severity"] !== undefined && { severity: string(json["severity"], "severity") as Severity }),
-    subjects: { include, ...(except !== undefined && { except: paths(except, separator) }) },
+    subjects: subjects(json["subjects"], separator),
     constraint,
     kinds,
     ignoreTags: strings(json["ignore_tags"], "ignore_tags"),
@@ -338,7 +343,7 @@ function rule(json: JsonObject, separator: string): Rule {
     candidates: candidates ?? "include",
     exemptions: list(json["exemptions"], "exemptions").map((entry) => {
       const exemption = object(entry, "exemption");
-      return { from: paths(exemption["from"], separator), to: paths(exemption["to"], separator) };
+      return { from: subjects(exemption["from"], separator), to: paths(exemption["to"], separator) };
     }),
   };
 }

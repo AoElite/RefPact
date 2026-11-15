@@ -1427,9 +1427,10 @@ rule("files are opened in the platform layer only")
     .check(&app);
 ```
 
-- `FROM` matches modules exactly, as the modules of a rule do. `TO` matches paths and what
-  is inside them, as targets do. A reference passes when its module matches `FROM` and one of
-  its paths, also the definition behind a re-export, matches `TO`.
+- `FROM` is a selection of modules, as the modules of a rule are: `any_of(..)`, `all()`,
+  `all_except(..)` or `any_of(..).except(..)`. `TO` matches paths and what is inside them, as
+  targets do. A reference passes when `FROM` selects its module and one of its paths, also
+  the definition behind a re-export, matches `TO`.
 - The rule does not see the reference at all: it is no violation, no edge of a cycle or a
   chain, and no use for `must_be_used`.
 - An exemption that lets no reference pass is an error. When the code that it allows is gone,

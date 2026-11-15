@@ -11,9 +11,9 @@ use crate::index::{Index, Tables};
 use crate::items;
 use crate::lengths;
 use crate::model::{FactSet, KindFilter, RawPattern, What};
-use crate::pattern::{join, Pattern};
+use crate::pattern::{join, Path, Pattern};
 use crate::reach;
-use crate::rule::{Constraint, Exemption, Include, Rule};
+use crate::rule::{Constraint, Exemption, Include, Rule, Subjects};
 use crate::uses;
 use crate::violation::Violation;
 
@@ -100,26 +100,14 @@ fn evaluate_with(
 
     // Subjects.
     let errors_before_subjects = errors.len();
-    let include = match &rule.subjects.include {
-        Include::All => None,
-        Include::AnyOf(patterns) => Some(unit_list(patterns, Role::Subject, facts, &mut errors)),
-    };
-    let except = match &rule.subjects.except {
-        None => Vec::new(),
-        Some(patterns) => unit_list(patterns, Role::SubjectException, facts, &mut errors),
-    };
+    let subjects = Selection::new(
+        &rule.subjects,
+        [Role::Subject, Role::SubjectException],
+        facts,
+        &mut errors,
+    );
     // For each unit, by position: whether the rule selects it.
-    let selected: Vec<bool> = facts
-        .units
-        .iter()
-        .map(|unit| {
-            let included = match &include {
-                None => true,
-                Some(patterns) => patterns.iter().any(|pattern| pattern.matches(unit)),
-            };
-            included && !except.iter().any(|pattern| pattern.matches(unit))
-        })
-        .collect();
+    let selected: Vec<bool> = facts.units.iter().map(|unit| subjects.has(unit)).collect();
     if errors.len() == errors_before_subjects && !selected.contains(&true) {
         errors.push(error(ErrorCode::NoSubjects, None, None));
     }
@@ -168,7 +156,7 @@ fn evaluate_with(
         &mut errors,
     );
 
-    let exemptions: Vec<(Vec<Pattern>, Vec<Pattern>)> = rule
+    let exemptions: Vec<(Selection, Vec<Pattern>)> = rule
         .exemptions
         .iter()
         .map(|exemption| exemption_patterns(exemption, facts, &mut errors))
@@ -204,7 +192,14 @@ fn evaluate_with(
                 .into_iter()
                 .map(|number| {
                     let exemption = &rule.exemptions[number];
-                    let value = format!("{} -> {}", list(&exemption.from), list(&exemption.to));
+                    let mut from = match &exemption.from.include {
+                        Include::All => "all".to_owned(),
+                        Include::AnyOf(patterns) => list(patterns),
+                    };
+                    if let Some(except) = &exemption.from.except {
+                        from = format!("{from} except {}", list(except));
+                    }
+                    let value = format!("{from} -> {}", list(&exemption.to));
                     error(
                         ErrorCode::UnusedExemption,
                         Some(Role::Exemption),
@@ -218,13 +213,52 @@ fn evaluate_with(
     Ok(checker.violations(&Scope::new(filters, &index, &selected)))
 }
 
+/// The units that a selection has: the subjects of a rule, or the units of an exemption.
+struct Selection {
+    /// `None`: all units.
+    include: Option<Vec<Pattern>>,
+    except: Vec<Pattern>,
+}
+
+impl Selection {
+    /// The patterns of a selection, with their errors (SPEC section 5, checks 2 to 5). The
+    /// roles are those of the included patterns and of the exceptions.
+    fn new(
+        selection: &Subjects,
+        [include, except]: [Role; 2],
+        facts: &FactSet,
+        errors: &mut Vec<RuleError>,
+    ) -> Selection {
+        Selection {
+            include: match &selection.include {
+                Include::All => None,
+                Include::AnyOf(patterns) => Some(unit_list(patterns, include, facts, errors)),
+            },
+            except: match &selection.except {
+                None => Vec::new(),
+                Some(patterns) => unit_list(patterns, except, facts, errors),
+            },
+        }
+    }
+
+    /// Whether the selection has the unit: a pattern matches it exactly, and no exception.
+    fn has(&self, unit: &Path) -> bool {
+        let included = match &self.include {
+            None => true,
+            Some(patterns) => patterns.iter().any(|pattern| pattern.matches(unit)),
+        };
+        included && !self.except.iter().any(|pattern| pattern.matches(unit))
+    }
+}
+
 /// The patterns of one exemption, with their errors (SPEC section 5, check 13).
 fn exemption_patterns(
     exemption: &Exemption,
     facts: &FactSet,
     errors: &mut Vec<RuleError>,
-) -> (Vec<Pattern>, Vec<Pattern>) {
-    let from = unit_list(&exemption.from, Role::ExemptionFrom, facts, errors);
+) -> (Selection, Vec<Pattern>) {
+    let roles = [Role::ExemptionFrom, Role::ExemptionException];
+    let from = Selection::new(&exemption.from, roles, facts, errors);
     if exemption.to.is_empty() {
         errors.push(error(ErrorCode::EmptyList, Some(Role::ExemptionTo), None));
     }
@@ -237,7 +271,7 @@ fn exemption_patterns(
 fn exempt_facts(
     filters: &Filters,
     index: &mut Index,
-    exemptions: &[(Vec<Pattern>, Vec<Pattern>)],
+    exemptions: &[(Selection, Vec<Pattern>)],
     reads_references: bool,
 ) -> Vec<usize> {
     let facts = index.facts;
@@ -248,7 +282,7 @@ fn exempt_facts(
             continue;
         };
         for (number, (from, to)) in exemptions.iter().enumerate() {
-            let lets_pass = from.iter().any(|pattern| pattern.matches(&fact.unit))
+            let lets_pass = from.has(&fact.unit)
                 && reference
                     .paths()
                     .any(|path| to.iter().any(|pattern| pattern.matches_within(path)));
