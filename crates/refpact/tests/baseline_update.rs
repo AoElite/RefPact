@@ -80,9 +80,12 @@ fn the_environment_variables_make_the_checks_write_their_files() {
     onion.check_diagram(&planted, dir.join("onion.gv"));
     // The name of the file must give a format, also for an update.
     let unnamed = rings.verify_diagram(&planted, dir.join("rings.txt"));
-    assert!(
-        matches!(unnamed, Err(Failure::Diagram { .. })),
-        "{unnamed:?}"
+    assert_eq!(
+        unnamed.unwrap_err().to_string(),
+        format!(
+            "the name of the diagram file {} must end in .md, .mmd, .mermaid, .dot or .gv",
+            dir.join("rings.txt").display()
+        )
     );
     assert!(!dir.join("rings.txt").exists());
     std::env::remove_var("REFPACT_DIAGRAM");
@@ -104,8 +107,15 @@ fn the_environment_variables_make_the_checks_write_their_files() {
     // An update does not write a file that is current.
     std::env::set_var("REFPACT_DIAGRAM", "update");
     rings.check_diagram(&planted, &markdown);
+    // A name with the line ends of Windows is in the diagram as it is.
+    let two_lines = rule("two\r\nlines")
+        .modules(any_of(["crate::rings::*"]))
+        .must_be_acyclic();
+    two_lines.check_diagram(&planted, dir.join("lines.mmd"));
     std::env::remove_var("REFPACT_DIAGRAM");
     assert!(read("rings.md").contains("\r\n"));
+    assert!(read("lines.mmd").contains("two\r\nlines"));
+    two_lines.check_diagram(&planted, dir.join("lines.mmd"));
 
     // A file with another diagram is not current, and the check does not write it.
     assert!(stack().verify_diagram(&planted, &markdown).is_err());

@@ -179,8 +179,10 @@ impl Session {
             "diagram-format" => {
                 let file = get(&request, "file", string)?;
                 match DiagramFormat::of_file(&file) {
-                    Some(format) => object([("format", borrowed(format.as_str()))]).to_text(),
-                    None => object([]).to_text(),
+                    Ok(format) => object([("format", borrowed(format.as_str()))]).to_text(),
+                    Err(message) => {
+                        object([("message", Value::String(Cow::Owned(message)))]).to_text()
+                    }
                 }
             }
             "render-stale-diagram" => {
@@ -991,7 +993,10 @@ mod tests {
             format_of(&mut session, "docs/a.md"),
             r#"{"format":"markdown"}"#
         );
-        assert_eq!(format_of(&mut session, "docs/a.txt"), "{}");
+        assert_eq!(
+            format_of(&mut session, "docs/a.txt"),
+            r#"{"message":"the name of the diagram file docs/a.txt must end in .md, .mmd, .mermaid, .dot or .gv"}"#
+        );
         let stale = call(
             &mut session,
             r#"{"op": "render-stale-diagram", "rule": "r", "file": "a.md"}"#,

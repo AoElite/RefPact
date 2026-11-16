@@ -58,6 +58,11 @@ export class Baseline {
   }
 }
 
+/** Whether the environment variable asks the checks to write their files. @internal */
+export function updateRequested(variable: string): boolean {
+  return process.env[variable] === "update";
+}
+
 /** Writes a file, and the directory of the file when it is not there. @internal */
 export function writeFile(file: string, text: string): void {
   mkdirSync(path.dirname(file), { recursive: true });

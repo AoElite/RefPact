@@ -1,6 +1,7 @@
 /** Rules for TypeScript projects, written as plain values in a test file. */
 import { isBuiltin } from "node:module";
 
+import { updateRequested } from "./baseline.ts";
 import type { Baseline } from "./baseline.ts";
 import { applyBaseline, diagram, evaluate, graph, renderErrors, renderStale, renderViolations, select, tangles } from "./core/index.ts";
 import type { DiagramFormat, DiagramNodes } from "./core/index.ts";
@@ -841,7 +842,7 @@ export class ImportRule {
    * of the rule to the file and passes.
    */
   verifyWithBaseline(project: Project, baseline: Baseline): Failure | undefined {
-    if (process.env["REFPACT_BASELINE"] === "update") {
+    if (updateRequested("REFPACT_BASELINE")) {
       return this.writeBaseline(project, baseline);
     }
     const found = this.violationsForBaseline(project);

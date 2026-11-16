@@ -595,8 +595,9 @@ line ` ``` `.
 **Files.** A binding can check a *diagram file*: a file whose whole text is the diagram of a
 rule. The extension of the name of the file, in upper or lower case, gives the format: `.md` is `markdown`, `.mmd`
 and `.mermaid` are `mermaid`, and `.dot` and `.gv` are `dot`. A name with another extension,
-or with none, is a failure. The file is *current* when its text, with each `\r\n` read as
-`\n`, is the diagram. A file that is not current, or is not there, is a failure with this
+or with none, is a failure with the message `the name of the diagram file <file> must end in
+.md, .mmd, .mermaid, .dot or .gv`. The file is *current* when its text and the diagram are
+the same after each `\r\n` is read as `\n`. `<file>` is the name as the test gives it. A file that is not current, or is not there, is a failure with this
 report:
 
 ```
@@ -922,7 +923,7 @@ names the handle, so that a large fact set crosses the boundary once and not for
 | `select` | `handle`, `rule` with a `custom` constraint or a `custom` demand | `{ ok: true, subjects, units, references, markers, declarations, items }` or `{ ok: false, errors }` |
 | `graph` | `handle`, `rule` as for `select`, `subjects`, `tangles` | `{ ok: true, nodes, edges }`, `{ ok: true, tangles }` or `{ ok: false, errors }` |
 | `diagram` | `handle`, `rule`, `slices`, `layers`, `format` | `{ ok: true, text }` or `{ ok: false, errors }` |
-| `diagram-format` | `file` (the name of a diagram file) | `{ format }`, or `{}` when the name gives no format |
+| `diagram-format` | `file` (the name of a diagram file) | `{ format }`, or `{ message }` when the name gives no format |
 | `render-stale-diagram` | `rule` (the name), `file` (the name of the diagram file) | `{ text }` |
 | `print-path` | `path`, `format` | `{ text }` |
 | `render-violation` | `violation`, `format` | `{ text }` |

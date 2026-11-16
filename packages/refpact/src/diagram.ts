@@ -1,8 +1,7 @@
 /** The diagram file: a diagram that a test keeps current. */
 import { readFileSync } from "node:fs";
-import path from "node:path";
 
-import { writeFile } from "./baseline.ts";
+import { updateRequested, writeFile } from "./baseline.ts";
 import { diagramFormat, renderStaleDiagram } from "./core/index.ts";
 import type { DiagramFormat } from "./core/index.ts";
 import type { Failure } from "./rules.ts";
@@ -14,13 +13,12 @@ import type { Failure } from "./rules.ts";
  *
  * @internal
  */
-export function verifyDiagram(rule: string, name: string, draw: (format: DiagramFormat) => string | Failure): Failure | undefined {
-  const file = path.resolve(name);
-  const format = diagramFormat(file);
-  if (format === undefined) {
-    return { type: "diagram", message: `refpact: the name of the diagram file ${file} must end in .md, .mmd, .mermaid, .dot or .gv` };
+export function verifyDiagram(rule: string, file: string, draw: (format: DiagramFormat) => string | Failure): Failure | undefined {
+  const named = diagramFormat(file);
+  if ("message" in named) {
+    return { type: "diagram", message: `refpact: ${named.message}` };
   }
-  const text = draw(format);
+  const text = draw(named.format);
   if (typeof text !== "string") {
     return text;
   }
@@ -32,11 +30,12 @@ export function verifyDiagram(rule: string, name: string, draw: (format: Diagram
       return { type: "diagram", message: `refpact: cannot read ${file}: ${(error as Error).message}` };
     }
   }
-  // A checkout can give the file the line ends of Windows.
-  if (found?.replaceAll("\r\n", "\n") === text) {
+  // A checkout can give the file the line ends of Windows, and a name in the diagram can
+  // have them too.
+  if (found?.replaceAll("\r\n", "\n") === text.replaceAll("\r\n", "\n")) {
     return undefined;
   }
-  if (process.env["REFPACT_DIAGRAM"] === "update") {
+  if (updateRequested("REFPACT_DIAGRAM")) {
     try {
       writeFile(file, text);
     } catch (error) {

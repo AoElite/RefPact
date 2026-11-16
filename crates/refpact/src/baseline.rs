@@ -31,8 +31,9 @@ pub(crate) fn writing() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-pub(crate) fn update_requested() -> bool {
-    std::env::var("REFPACT_BASELINE").is_ok_and(|value| value == "update")
+/// Whether the environment variable asks the checks to write their files.
+pub(crate) fn update_requested(variable: &str) -> bool {
+    std::env::var(variable).is_ok_and(|value| value == "update")
 }
 
 impl Baseline {

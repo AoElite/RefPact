@@ -146,13 +146,24 @@ export function diagram(rule: Rule, facts: FactSet, nodes: DiagramNodes, format:
   return request("diagram", { handle: handleOf(facts), rule, ...nodes, format });
 }
 
+/** The format that the name of a diagram file gives, or why the name gives none. */
+export type DiagramFormatResult =
+  | {
+      /** The format of the diagram in the file. */
+      readonly format: DiagramFormat;
+    }
+  | {
+      /** The extensions that the name of a diagram file can have. */
+      readonly message: string;
+    };
+
 /**
  * The format of a diagram in a file, by the extension of its name: `.md` is `markdown`,
- * `.mmd` and `.mermaid` are `mermaid`, `.dot` and `.gv` are `dot`. `undefined`: the name has
- * another extension, or none.
+ * `.mmd` and `.mermaid` are `mermaid`, `.dot` and `.gv` are `dot`. A message: the name has
+ * another extension, or none, and the message says which extensions a name can have.
  */
-export function diagramFormat(file: string): DiagramFormat | undefined {
-  return request<{ format?: DiagramFormat }>("diagram-format", { file }).format;
+export function diagramFormat(file: string): DiagramFormatResult {
+  return request("diagram-format", { file });
 }
 
 /** The report of a diagram file whose text is not the diagram of the rule. */

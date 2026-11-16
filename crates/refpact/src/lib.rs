@@ -696,7 +696,7 @@ impl Rule {
     /// When the environment variable `REFPACT_BASELINE` is `update`, this writes the
     /// violations of the rule to the file and passes.
     pub fn verify_with_baseline(&self, krate: &Crate, baseline: &Baseline) -> Result<(), Failure> {
-        if baseline::update_requested() {
+        if baseline::update_requested("REFPACT_BASELINE") {
             return self.write_baseline(krate, baseline);
         }
         let violations = self.violations_for_baseline(krate)?;
@@ -759,6 +759,7 @@ impl Rule {
 
 /// Why a rule did not pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Failure {
     /// The code breaks the rule.
     Violated {

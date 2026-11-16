@@ -15,6 +15,7 @@ use crate::violation::Violation;
 
 /// The text form of a diagram.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DiagramFormat {
     /// A Mermaid flowchart. Markdown viewers that know Mermaid draw it from a fenced block
     /// ` ```mermaid `.
@@ -39,14 +40,17 @@ impl DiagramFormat {
     /// The format of a diagram in a file, by the extension of its name, in upper or lower case: `.md` is
     /// [`Markdown`](DiagramFormat::Markdown), `.mmd` and `.mermaid` are
     /// [`Mermaid`](DiagramFormat::Mermaid), `.dot` and `.gv` are
-    /// [`Dot`](DiagramFormat::Dot). `None`: the name has another extension, or none.
-    pub fn of_file(name: &str) -> Option<DiagramFormat> {
-        let (_, extension) = name.rsplit_once('.')?;
-        match extension.to_ascii_lowercase().as_str() {
-            "md" => Some(DiagramFormat::Markdown),
-            "mmd" | "mermaid" => Some(DiagramFormat::Mermaid),
-            "dot" | "gv" => Some(DiagramFormat::Dot),
-            _ => None,
+    /// [`Dot`](DiagramFormat::Dot). An error: the name has another extension, or none, and
+    /// the text says which extensions a name can have.
+    pub fn of_file(name: &str) -> Result<DiagramFormat, String> {
+        let extension = name.rsplit_once('.').map(|(_, extension)| extension);
+        match extension.map(str::to_ascii_lowercase).as_deref() {
+            Some("md") => Ok(DiagramFormat::Markdown),
+            Some("mmd" | "mermaid") => Ok(DiagramFormat::Mermaid),
+            Some("dot" | "gv") => Ok(DiagramFormat::Dot),
+            _ => Err(format!(
+                "the name of the diagram file {name} must end in .md, .mmd, .mermaid, .dot or .gv"
+            )),
         }
     }
 }
@@ -328,9 +332,14 @@ mod tests {
         let names = formats.map(|format| format.map(DiagramFormat::as_str));
         assert_eq!(
             names,
-            ["markdown", "mermaid", "mermaid", "dot", "dot"].map(Some)
+            ["markdown", "mermaid", "mermaid", "dot", "dot"].map(Ok)
         );
-        assert_eq!(DiagramFormat::of_file("a.txt"), None);
-        assert_eq!(DiagramFormat::of_file("md"), None);
+        let message = |name: &str| {
+            format!(
+                "the name of the diagram file {name} must end in .md, .mmd, .mermaid, .dot or .gv"
+            )
+        };
+        assert_eq!(DiagramFormat::of_file("a.txt"), Err(message("a.txt")));
+        assert_eq!(DiagramFormat::of_file("md"), Err(message("md")));
     }
 }

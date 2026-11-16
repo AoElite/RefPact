@@ -160,6 +160,9 @@ it("a diagram file is checked against the diagram, and written on request", () =
   withVariable("yes", () => {
     expect(features.verifyDiagram(app, file("features.md"))).toMatchObject({ type: "stale-diagram", rule: "the features", file: file("features.md") });
     expect(existsSync(file("features.md"))).toBe(false);
+    // The report names the file as the test gives it.
+    const relative = path.relative(process.cwd(), file("features.md"));
+    expect(features.verifyDiagram(app, relative)).toMatchObject({ type: "stale-diagram", file: relative });
   });
   withVariable("update", () => {
     for (const name of ["features.md", "features.mmd", "features.dot"]) {
@@ -168,7 +171,10 @@ it("a diagram file is checked against the diagram, and written on request", () =
     stack.checkDiagram(app, file("stack.mermaid"));
     onion.checkDiagram(app, file("onion.gv"));
     // The name of the file must give a format, also for an update.
-    expect(features.verifyDiagram(app, file("features.txt"))).toMatchObject({ type: "diagram" });
+    expect(features.verifyDiagram(app, file("features.txt"))).toEqual({
+      type: "diagram",
+      message: `refpact: the name of the diagram file ${file("features.txt")} must end in .md, .mmd, .mermaid, .dot or .gv`,
+    });
     expect(existsSync(file("features.txt"))).toBe(false);
   });
   expect(read("features.mmd")).toBe(features.diagram(app));
@@ -185,8 +191,15 @@ it("a diagram file is checked against the diagram, and written on request", () =
   writeFileSync(file("features.md"), read("features.md").replaceAll("\n", "\r\n"));
   features.checkDiagram(app, file("features.md"));
   // An update does not write a file that is current.
-  withVariable("update", () => features.checkDiagram(app, file("features.md")));
+  // A name with the line ends of Windows is in the diagram as it is.
+  const twoLines = rule("two\r\nlines").files(all()).mustBeAcyclicBetween(anyOf("src/features/*"));
+  withVariable("update", () => {
+    features.checkDiagram(app, file("features.md"));
+    twoLines.checkDiagram(app, file("lines.mmd"));
+  });
   expect(read("features.md")).toContain("\r\n");
+  expect(read("lines.mmd")).toContain("two\r\nlines");
+  twoLines.checkDiagram(app, file("lines.mmd"));
 
   // A file with another diagram is not current, and the check does not write it.
   expect(stack.verifyDiagram(app, file("features.md"))).toMatchObject({ type: "stale-diagram" });
