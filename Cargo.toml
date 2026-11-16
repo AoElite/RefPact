@@ -5,7 +5,7 @@ members = ["crates/refpact-core", "crates/refpact", "crates/refpact-wasm", "xtas
 exclude = ["fixtures"]
 
 [workspace.package]
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 # The oldest Rust that builds the crate. CI checks it.
 rust-version = "1.80"
