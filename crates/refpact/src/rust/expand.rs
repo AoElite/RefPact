@@ -12,9 +12,9 @@ use crate::core::{Declaration, Fact, FactSet, Path, What};
 use crate::rust::calls::MacroSite;
 use crate::rust::extract;
 use crate::rust::items;
-use crate::rust::load::LoadedFile;
 use crate::rust::scope::Module;
 use crate::rust::sources::Expansions;
+use crate::rust::syntax::LoadedFile;
 
 /// The tag of what the expansion of a macro holds.
 pub(crate) const TAG: &str = "generated";

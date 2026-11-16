@@ -98,10 +98,14 @@ const methods: Filters<unknown> & ThisType<Filtered<unknown>> = {
   },
   ignoringImport(from, to) {
     // Without the types, anything gets here: packages as the files, or a selection as the targets.
+    const wrong = new TypeError("refpact: ignoringImport(..) takes a selection of files as in files(..), then anyOf(..) of targets");
+    if (typeof from !== "object" || from === null) {
+      throw wrong;
+    }
     const files = "patterns" in from ? { include: from.patterns, excluded: undefined } : from;
     const lists: readonly unknown[] = [files.include ?? [], files.excluded ?? [], to.patterns];
     if (!lists.every(Array.isArray) || [files.include, files.excluded].some((list) => list?.some((pattern) => typeof pattern !== "string"))) {
-      throw new TypeError("refpact: ignoringImport(..) takes a selection of files as in files(..), then anyOf(..) of targets");
+      throw wrong;
     }
     const exemption = { from: subjects(files), to: to.patterns.map(targetPattern) };
     return this.filtered(about((rule) => ({ ...rule, exemptions: [...(rule.exemptions ?? []), exemption] })));

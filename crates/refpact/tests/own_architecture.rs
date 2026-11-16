@@ -2,11 +2,12 @@
 //! has the Rust front end in `refpact::rust` and the binding, which is the crate root with
 //! `refpact::baseline`, `refpact::group`, `refpact::items`,
 //! `refpact::layers` and `refpact::onion`. The crate
-//! `refpact_wasm` gives the core to other languages.
+//! `refpact_wasm` gives the core to other languages. The crate `xtask` has the tasks of the
+//! repository.
 
 use std::sync::LazyLock;
 
-use refpact::{all_except, any_of, layers, rule, unsafe_code, Detail, Visibility, Workspace};
+use refpact::{all, all_except, any_of, layers, rule, unsafe_code, Detail, Visibility, Workspace};
 
 static REFPACT: LazyLock<Workspace> = LazyLock::new(|| {
     Workspace::options(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
@@ -16,6 +17,14 @@ static REFPACT: LazyLock<Workspace> = LazyLock::new(|| {
             "crates/refpact",
             "crates/refpact-wasm",
         ])
+        .load()
+        .unwrap()
+});
+
+/// The tasks of the repository, which no crate of the library uses.
+static XTASK: LazyLock<Workspace> = LazyLock::new(|| {
+    Workspace::options(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+        .members(["xtask"])
         .load()
         .unwrap()
 });
@@ -146,6 +155,7 @@ fn name_resolution_does_not_read_syntax() {
             "refpact::rust::extract",
             "refpact::rust::macros",
             "refpact::rust::sources",
+            "refpact::rust::syntax",
         ]))
         .check(&REFPACT);
 }
@@ -209,10 +219,21 @@ fn only_the_baseline_and_the_diagram_file_read_and_write_files_in_the_binding() 
 }
 
 #[test]
-fn the_parts_of_the_core_form_no_cycle() {
+fn the_parts_of_each_crate_form_no_cycle() {
     rule("the parts of the core form no cycle")
         .modules(all_except(["refpact_core"]))
         .must_be_acyclic_between(any_of(["refpact_core::*"]))
+        .except_in_test_code()
+        .check(&REFPACT);
+    // The front end is one part of the binding here.
+    rule("the parts of the binding form no cycle")
+        .modules(any_of(["refpact::*", "refpact::rust::**"]))
+        .must_be_acyclic_between(any_of(["refpact::*"]))
+        .except_in_test_code()
+        .check(&REFPACT);
+    rule("the parts of the front end form no cycle")
+        .modules(any_of(["refpact::rust::**"]).except(["refpact::rust"]))
+        .must_be_acyclic_between(any_of(["refpact::rust::*"]))
         .except_in_test_code()
         .check(&REFPACT);
 }
@@ -241,6 +262,37 @@ fn the_parts_are_layers_and_the_core_reaches_no_file() {
         .modules(any_of(["refpact_core::**"]))
         .must_not_reach(any_of(["std::fs", "std::env", "std::process"]))
         .check(&REFPACT);
+}
+
+/// A `pub` item that no other crate can name is not public: it is `pub(crate)`.
+#[test]
+fn every_public_item_is_exported() {
+    rule("every public item is exported")
+        .items(all())
+        .with_visibility([Visibility::Pub])
+        .must_be_exported()
+        .check(&REFPACT);
+}
+
+#[test]
+fn the_tasks_of_the_repository_stand_apart() {
+    rule("the tasks use only the standard library and the JSON reader")
+        .modules(all())
+        .must_only_use(any_of(["std", "core", "alloc", "serde_json", "xtask"]))
+        .check(&XTASK);
+    rule("the parts of the tasks form no cycle")
+        .modules(all())
+        .must_be_acyclic_between(any_of(["xtask::*"]))
+        .except_in_test_code()
+        .check(&XTASK);
+    rule("the list of mutations and the schemata are data")
+        .modules(any_of(["xtask::mutants::list", "xtask::mutants::schemata"]))
+        .must_not_use(any_of(["std::fs", "std::process", "std::env"]))
+        .check(&XTASK);
+    rule("the version bump starts no process")
+        .modules(any_of(["xtask::bump"]))
+        .must_not_use(any_of(["std::process"]))
+        .check(&XTASK);
 }
 
 #[test]
@@ -317,6 +369,13 @@ fn the_rules_above_can_fail() {
         .evaluate(&REFPACT)
         .unwrap();
     assert!(!front_end.is_empty());
+
+    let tasks = rule("probe")
+        .modules(any_of(["xtask::wasm", "xtask::mutants"]))
+        .must_not_use(any_of(["std::process", "std::fs"]))
+        .evaluate(&XTASK)
+        .unwrap();
+    assert!(!tasks.is_empty());
 
     // The groups of the binding reach the file system through the baseline.
     let chain = rule("probe")

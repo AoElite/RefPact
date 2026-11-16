@@ -8,29 +8,29 @@ use crate::rust::scope::{Module, Name, Resolver};
 /// The kinds of item a declaration can have.
 pub(crate) mod item_kind {
     /// A function.
-    pub const FN: &str = "fn";
+    pub(crate) const FN: &str = "fn";
     /// A struct.
-    pub const STRUCT: &str = "struct";
+    pub(crate) const STRUCT: &str = "struct";
     /// An enum.
-    pub const ENUM: &str = "enum";
+    pub(crate) const ENUM: &str = "enum";
     /// A union.
-    pub const UNION: &str = "union";
+    pub(crate) const UNION: &str = "union";
     /// A trait.
-    pub const TRAIT: &str = "trait";
+    pub(crate) const TRAIT: &str = "trait";
     /// A type alias.
-    pub const TYPE: &str = "type";
+    pub(crate) const TYPE: &str = "type";
     /// A constant.
-    pub const CONST: &str = "const";
+    pub(crate) const CONST: &str = "const";
     /// A static.
-    pub const STATIC: &str = "static";
+    pub(crate) const STATIC: &str = "static";
     /// A `macro_rules!` macro.
-    pub const MACRO: &str = "macro";
+    pub(crate) const MACRO: &str = "macro";
     /// A field of a struct or a union, at the path of its owner and its name or number.
-    pub const FIELD: &str = "field";
+    pub(crate) const FIELD: &str = "field";
     /// A function of an inherent `impl` or of a trait, at the path of its type or trait.
-    pub const METHOD: &str = "method";
+    pub(crate) const METHOD: &str = "method";
     /// All item kinds.
-    pub const ALL: &[&str] = &[
+    pub(crate) const ALL: &[&str] = &[
         FN, STRUCT, ENUM, UNION, TRAIT, TYPE, CONST, STATIC, MACRO, FIELD, METHOD,
     ];
 }
@@ -38,36 +38,36 @@ pub(crate) mod item_kind {
 /// The visibilities a declaration can have.
 pub(crate) mod visibility {
     /// `pub`, or a macro with `#[macro_export]`.
-    pub const PUB: &str = "pub";
+    pub(crate) const PUB: &str = "pub";
     /// `pub(crate)`.
-    pub const PUB_CRATE: &str = "pub(crate)";
+    pub(crate) const PUB_CRATE: &str = "pub(crate)";
     /// `pub(super)` or `pub(in path)`.
-    pub const PUB_RESTRICTED: &str = "pub(restricted)";
+    pub(crate) const PUB_RESTRICTED: &str = "pub(restricted)";
     /// No `pub`, or `pub(self)`.
-    pub const PRIVATE: &str = "private";
+    pub(crate) const PRIVATE: &str = "private";
     /// All visibilities.
-    pub const ALL: &[&str] = &[PUB, PUB_CRATE, PUB_RESTRICTED, PRIVATE];
+    pub(crate) const ALL: &[&str] = &[PUB, PUB_CRATE, PUB_RESTRICTED, PRIVATE];
 }
 
 /// The relations a declaration can have.
 pub(crate) mod relation {
     /// A trait that an `impl Trait for Type` implements for the type.
-    pub const IMPLEMENTS: &str = "implements";
+    pub(crate) const IMPLEMENTS: &str = "implements";
     /// A derive macro of `#[derive(..)]`.
-    pub const DERIVES: &str = "derives";
+    pub(crate) const DERIVES: &str = "derives";
     /// Another attribute of the item: a built-in one by its name, any other by its path.
-    pub const ATTRIBUTE: &str = "attribute";
+    pub(crate) const ATTRIBUTE: &str = "attribute";
     /// A path at which other crates can name the item: through `pub` modules and
     /// `pub use` re-exports from the crate root.
-    pub const EXPORTED: &str = "exported";
+    pub(crate) const EXPORTED: &str = "exported";
     /// A path in the return type of a function or a method.
-    pub const RETURNS: &str = "returns";
+    pub(crate) const RETURNS: &str = "returns";
     /// A path in the type of a parameter of a function or a method, except `self`.
-    pub const TAKES: &str = "takes";
+    pub(crate) const TAKES: &str = "takes";
     /// A path in the type of a field.
-    pub const HAS_TYPE: &str = "has-type";
+    pub(crate) const HAS_TYPE: &str = "has-type";
     /// All relations.
-    pub const ALL: &[&str] = &[
+    pub(crate) const ALL: &[&str] = &[
         IMPLEMENTS, DERIVES, ATTRIBUTE, EXPORTED, RETURNS, TAKES, HAS_TYPE,
     ];
 }
@@ -75,21 +75,21 @@ pub(crate) mod relation {
 /// The modifiers a declaration can have.
 pub(crate) mod modifier {
     /// An `async fn`.
-    pub const ASYNC: &str = "async";
+    pub(crate) const ASYNC: &str = "async";
     /// A `const fn`.
-    pub const CONST: &str = "const";
+    pub(crate) const CONST: &str = "const";
     /// An `unsafe fn` or an `unsafe trait`.
-    pub const UNSAFE: &str = "unsafe";
+    pub(crate) const UNSAFE: &str = "unsafe";
     /// A function with an ABI: `extern "C" fn`.
-    pub const EXTERN: &str = "extern";
+    pub(crate) const EXTERN: &str = "extern";
     /// A `static mut`.
-    pub const MUT: &str = "mut";
+    pub(crate) const MUT: &str = "mut";
     /// An item with a doc comment (`///`) or a `#[doc = ".."]`.
-    pub const DOCUMENTED: &str = "documented";
+    pub(crate) const DOCUMENTED: &str = "documented";
     /// An item with `#[doc(hidden)]`.
-    pub const HIDDEN: &str = "hidden";
+    pub(crate) const HIDDEN: &str = "hidden";
     /// All modifiers.
-    pub const ALL: &[&str] = &[ASYNC, CONST, UNSAFE, EXTERN, MUT, DOCUMENTED, HIDDEN];
+    pub(crate) const ALL: &[&str] = &[ASYNC, CONST, UNSAFE, EXTERN, MUT, DOCUMENTED, HIDDEN];
 }
 
 /// The modifiers of a signature: `async`, `const`, `unsafe` and `extern`.

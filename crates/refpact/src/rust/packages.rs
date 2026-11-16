@@ -12,20 +12,20 @@ use std::path::{Path as FilePath, PathBuf};
 use crate::core::{Certainty, Fact, FactSet, Path, Property, Reference, What};
 use crate::rust::manifest::{self, Table};
 use crate::rust::sources::json::Json;
-use crate::rust::{cfg, extract};
+use crate::rust::{cfg, kinds};
 
 /// The kinds of the references that the manifests give.
 pub(crate) mod kind {
     /// A dependency of `[dependencies]`.
-    pub const DEPENDENCY: &str = "dependency";
+    pub(crate) const DEPENDENCY: &str = "dependency";
     /// A dependency of `[dev-dependencies]`.
-    pub const DEV_DEPENDENCY: &str = "dev-dependency";
+    pub(crate) const DEV_DEPENDENCY: &str = "dev-dependency";
     /// A dependency of `[build-dependencies]`.
-    pub const BUILD_DEPENDENCY: &str = "build-dependency";
+    pub(crate) const BUILD_DEPENDENCY: &str = "build-dependency";
     /// A package that a dependency needs, and that the manifest does not name.
-    pub const TRANSITIVE_DEPENDENCY: &str = "transitive-dependency";
+    pub(crate) const TRANSITIVE_DEPENDENCY: &str = "transitive-dependency";
     /// All of them.
-    pub const ALL: &[&str] = &[
+    pub(crate) const ALL: &[&str] = &[
         DEPENDENCY,
         DEV_DEPENDENCY,
         BUILD_DEPENDENCY,
@@ -302,7 +302,7 @@ pub(crate) fn facts(
             properties: packages[package].properties.clone(),
         }),
     };
-    let test = || extract::TAG_TEST.to_owned();
+    let test = || kinds::TAG_TEST.to_owned();
     let conditions = |target: &Option<String>| -> Vec<String> {
         target
             .as_deref()

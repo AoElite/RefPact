@@ -424,6 +424,10 @@ type CoreTargets = { anyOf: RawPattern[]; unverified: RawPattern[] };
 
 function coreTargets(targets: AnyOf | Targets): CoreTargets {
   const set = targets instanceof AnyOf ? new Targets(targets.patterns, []) : targets;
+  // Without the types, a selection of files gets here.
+  if (!(set instanceof Targets)) {
+    throw new TypeError("refpact: the targets of a rule are anyOf(..), not a selection of files as in files(..)");
+  }
   return { anyOf: set.anyOf.map(targetPattern), unverified: set.unverified.map(targetPattern) };
 }
 

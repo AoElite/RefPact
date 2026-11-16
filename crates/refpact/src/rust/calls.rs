@@ -8,7 +8,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::core::{Certainty, Fact, FactSet, Path, Reference, What};
-use crate::rust::extract::kind;
+use crate::rust::kinds::kind;
 use crate::rust::scip::{Defined, Form, Index, Place, Symbol};
 
 /// What the front end found for the index to resolve.

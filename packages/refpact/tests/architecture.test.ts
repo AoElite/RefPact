@@ -58,6 +58,17 @@ it("the source does not import the tests or the test runner", () => {
     .check(self);
 });
 
+// The core is public as `core`. Two tests read what the loader does before a project exists.
+it("the tests use the package through its entry", () => {
+  rule("the tests use the package through its entry")
+    .files(anyOf("tests/**"))
+    .mustNotImport(anyOf("src/**"))
+    .ignoringImport(anyOf("tests/**"), anyOf("src/index.ts", "src/core/index.ts"))
+    .ignoringImport(anyOf("tests/planted.test.ts", "tests/loading.test.ts"), anyOf("src/frontend/checks.ts"))
+    .ignoringImport(anyOf("tests/loading.test.ts"), anyOf("src/frontend/project.ts"))
+    .check(self);
+});
+
 it("only the project loader, the component files, the baseline, the diagram file, the dependencies and the loader of the core read the file system", () => {
   rule("only the project loader, the component files, the baseline, the diagram file, the dependencies and the loader of the core read the file system")
     .files(anyOf("src/**").except("src/frontend/project.ts", "src/frontend/components.ts", "src/baseline.ts", "src/diagram.ts", "src/frontend/dependencies.ts", "src/core/wasm.ts"))

@@ -346,11 +346,13 @@ it("exemptions", () => {
     expect(excepted?.message).toContain("exemption `src/domain/** except src/domain/price.ts -> src/ui/**` lets no reference pass");
 
     // without the types: packages are no files, and a selection is no list of targets
-    const wrong = [anyOf(pkg("node:fs")) as unknown as AnyOf<string>, anyOf("**")];
-    const targets = [anyOf("src/ui/**"), all() as unknown as AnyOf];
+    const wrong = [anyOf(pkg("node:fs")) as unknown as AnyOf<string>, anyOf("**"), "src/**" as unknown as AnyOf<string>];
+    const targets = [anyOf("src/ui/**"), all() as unknown as AnyOf, anyOf("src/ui/**")];
     wrong.forEach((from, index) => {
       expect(() => domain().ignoringImport(from, targets[index] as AnyOf)).toThrow("takes a selection of files as in files(..)");
     });
+    const selection = anyOf("src/ui/**").except("src/ui/routes.ts") as unknown as AnyOf;
+    expect(() => rule("a selection as the targets").files(all()).mustNotImport(selection).verify(shop)).toThrow("the targets of a rule are anyOf(..)");
   }
 
   // an exempt import is no edge of a cycle

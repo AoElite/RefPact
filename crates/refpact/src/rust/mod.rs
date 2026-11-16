@@ -11,6 +11,7 @@ mod cfg;
 mod expand;
 mod extract;
 pub(crate) mod items;
+mod kinds;
 mod load;
 mod macros;
 mod manifest;
@@ -20,6 +21,7 @@ mod packages;
 mod scip;
 mod scope;
 mod sources;
+mod syntax;
 mod tables;
 mod workers;
 mod workspace;
@@ -39,20 +41,20 @@ use scope::Name;
 use sources::Sources;
 
 /// The reference kinds this front end produces.
-pub mod kind {
-    pub use crate::rust::extract::kind::*;
-    pub use crate::rust::packages::kind::{
+pub(crate) mod kind {
+    pub(crate) use crate::rust::kinds::kind::*;
+    pub(crate) use crate::rust::packages::kind::{
         BUILD_DEPENDENCY, DEPENDENCY, DEV_DEPENDENCY, TRANSITIVE_DEPENDENCY,
     };
 }
 
 /// The markers this front end produces.
-pub mod marker {
-    pub use crate::rust::extract::marker::*;
+pub(crate) mod marker {
+    pub(crate) use crate::rust::kinds::marker::*;
 }
 
 /// The tag of facts inside `#[cfg(test)]` code and test functions.
-pub const TAG_TEST: &str = extract::TAG_TEST;
+pub const TAG_TEST: &str = kinds::TAG_TEST;
 
 /// The tag of what the expansion of a macro holds. Only a load with
 /// [`Options::expanding_macros`] gives facts with it.
