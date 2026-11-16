@@ -59,6 +59,9 @@ rule `files are opened in the platform layer only` is violated in 2 place(s):
   src/cache.rs:17:9: [files are opened in the platform layer only] crate::cache uses std::fs::write (expr, through the `use` at line 3)
 ```
 
+A test build has no optimization, so refpact runs at about half of its speed. A few lines in
+`Cargo.toml` change that: see [speed of the tests](#speed-of-the-tests).
+
 Five example rules, as a project writes them, are in
 [`crates/refpact/tests/five_rules.rs`](../crates/refpact/tests/five_rules.rs).
 
@@ -1469,6 +1472,8 @@ builds. Put this in the `Cargo.toml` of your crate, or of the workspace root if 
 ```toml
 [profile.dev.package.refpact]
 opt-level = 3
+[profile.dev.package.refpact-core]
+opt-level = 3
 [profile.dev.package.syn]
 opt-level = 3
 [profile.dev.package.proc-macro2]
@@ -1477,7 +1482,7 @@ opt-level = 3
 
 Your own code is built as before. On tokio 1.54 (380 files), this changes the time to load
 the crate from 0.5 s to 0.15 s, and the time of one rule from about 0.07 s to about 0.02 s.
-Cargo builds the five packages one time more slowly, and then keeps the result.
+Cargo builds these packages one time more slowly, and then keeps the result.
 
 Load the crate one time for all tests of a file, as the [quick start](#quick-start) does
 with `LazyLock`. `Crate::load` parses the files on up to eight threads.

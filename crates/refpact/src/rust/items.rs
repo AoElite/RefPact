@@ -1,6 +1,6 @@
 //! Declarations: the named items of each module, with their kind, visibility and relations.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::core::{Declaration, Path, Relation};
 use crate::rust::scope::{Module, Name, Resolver};
@@ -164,11 +164,18 @@ pub(crate) struct Impl {
 
 /// Adds the relation `implements` to each declaration that an `impl` names as its type.
 pub(crate) fn attach_impls(declarations: &mut [Declaration], impls: &[Impl]) {
-    for declaration in declarations.iter_mut() {
-        for found in impls {
-            if !found.types.contains(&declaration.path) {
-                continue;
+    // Looked up by the type, so that the work does not grow with declarations times `impl` blocks.
+    let mut of_type: HashMap<&Path, Vec<&Impl>> = HashMap::new();
+    for found in impls {
+        for path in &found.types {
+            let blocks = of_type.entry(path).or_default();
+            if !blocks.iter().any(|block| std::ptr::eq(*block, found)) {
+                blocks.push(found);
             }
+        }
+    }
+    for declaration in declarations.iter_mut() {
+        for found in of_type.get(&declaration.path).into_iter().flatten() {
             for target in &found.traits {
                 let tie = Relation {
                     relation: relation::IMPLEMENTS.to_owned(),

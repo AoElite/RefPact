@@ -19,6 +19,7 @@ use crate::rust::scip::Index;
 use crate::rust::scope::Resolver;
 use crate::rust::sources::Expansions;
 use crate::rust::sources::{self, Disk, Sources};
+use crate::rust::workers;
 use crate::rust::{analyse_tree, cfg, read_index, read_packages, resolve, Crate};
 
 /// The crates of one workspace, analysed together.
@@ -282,14 +283,19 @@ pub(crate) fn load(dir: PathBuf, plan: Plan, mut common: Common) -> Result<Works
     // The first segment of the paths of each package, by the name of the package.
     let mut packages: HashMap<String, String> = HashMap::new();
     let mut allowed_used = vec![false; common.allowed.len()];
+    // What each member needs for its analysis, or why it has none. The errors keep the order
+    // of the members.
+    let mut planned: Vec<(Spec, Planned)> = Vec::new();
     for spec in specs {
         let Member { name, dir } = &spec.member;
         let manifest_file = sources::join(dir, "Cargo.toml");
-        if loaded.iter().any(|(member, ..)| member.name == *name) {
-            return Err(LoadError::Manifest {
+        if planned.iter().any(|(other, _)| other.member.name == *name) {
+            let error = LoadError::Manifest {
                 file: manifest_file,
                 message: format!("a second crate with the name `{name}`"),
-            });
+            };
+            planned.push((spec, Err(error)));
+            break;
         }
 
         // Allowances are relative to the load; the crate wants them relative to itself.
@@ -312,6 +318,45 @@ pub(crate) fn load(dir: PathBuf, plan: Plan, mut common: Common) -> Result<Works
         let member_disk = Disk {
             base: disk.base.join(dir),
         };
+        let root = spec
+            .roots
+            .iter()
+            .find(|path| member_disk.read(path).is_some())
+            .cloned()
+            .ok_or_else(|| LoadError::RootNotFound {
+                tried: spec.roots.clone(),
+            });
+        let plan = root.map(|root| (member_disk, root, allowed));
+        planned.push((spec, plan));
+    }
+
+    // The members are analysed at the same time. Each analysis has the threads of its own.
+    let analyse = |place: usize| {
+        let (_, plan) = &planned[place];
+        let (member_disk, root, allowed) = plan.as_ref().map_err(Clone::clone)?;
+        analyse_tree(member_disk, root, allowed, calls, &common.settings)
+    };
+    let mut analysed: Vec<Option<Result<Analysed, LoadError>>> =
+        planned.iter().map(|_| None).collect();
+    workers::with_pool(
+        || |place: usize| (place, analyse(place)),
+        |pool| {
+            let mut waiting = 0;
+            for place in 0..planned.len() {
+                match pool.give(place) {
+                    Ok(()) => waiting += 1,
+                    Err(place) => analysed[place] = Some(analyse(place)),
+                }
+            }
+            for _ in 0..waiting {
+                let (place, found) = pool.reply();
+                analysed[place] = Some(found);
+            }
+        },
+    );
+
+    for ((spec, _), found) in planned.into_iter().zip(analysed) {
+        let Member { name, dir } = &spec.member;
         // An error of the one crate of a load names no member.
         let in_member = |error: LoadError| match single {
             true => error,
@@ -320,21 +365,12 @@ pub(crate) fn load(dir: PathBuf, plan: Plan, mut common: Common) -> Result<Works
                 error: Box::new(error),
             },
         };
-        let root = spec
-            .roots
-            .iter()
-            .find(|path| member_disk.read(path).is_some())
-            .ok_or_else(|| {
-                in_member(LoadError::RootNotFound {
-                    tried: spec.roots.clone(),
-                })
-            })?;
-        let (tree, mut facts, impls, pending) =
-            analyse_tree(&member_disk, root, &allowed, calls, &common.settings)
-                .map_err(in_member)?;
+        let found = found.unwrap_or_else(|| unreachable!("each member has one reply"));
+        let (tree, mut facts, impls, pending) = found.map_err(in_member)?;
         if let (Some(graph), Some(place)) = (&graph, spec.package) {
             add_crates_of_renamed(&mut facts, &graph.renamed(place));
             if common.dependencies {
+                let manifest_file = sources::join(dir, "Cargo.toml");
                 let text = disk.read(&manifest_file).unwrap_or_default();
                 let unit = vec![name.clone()];
                 dependencies.extend(packages::facts(graph, place, &unit, &manifest_file, &text));
@@ -423,6 +459,13 @@ fn add_crates_of_renamed(facts: &mut FactSet, renamed: &[(String, String)]) {
 /// One analysed member: its module tree, its facts and its `impl` blocks.
 type Loaded = (Member, Tree, FactSet, Vec<Impl>, Pending);
 
+/// What the analysis of one crate needs: its directory, its root and the files that it may
+/// leave unreached. An error: the crate has no analysis.
+type Planned = Result<(Disk, String, Vec<String>), LoadError>;
+
+/// What the analysis of one crate gives.
+type Analysed = (Tree, FactSet, Vec<Impl>, Pending);
+
 /// Makes one fact set of the crates. `crate` becomes the name of each crate, files get the
 /// directory of their crate, and a path into another member gets the definitions behind its
 /// re-exports as aliases. An `impl` in one member for a type of another is attached to the
@@ -441,6 +484,11 @@ fn merge(
     let found: Vec<Pending> = loaded
         .iter_mut()
         .map(|(.., pending)| std::mem::take(pending))
+        .collect();
+    // The facts of each member are moved into the merged set, not copied.
+    let fact_sets: Vec<FactSet> = loaded
+        .iter_mut()
+        .map(|(_, _, facts, ..)| std::mem::take(facts))
         .collect();
     let macros: Vec<Vec<MacroSite>> = found.iter().map(|found| found.macros.clone()).collect();
     let names: BTreeMap<&str, usize> = loaded
@@ -501,7 +549,9 @@ fn merge(
         }
     }
 
-    for ((index, (member, _, facts, ..)), found) in loaded.iter().enumerate().zip(found) {
+    let members = loaded.iter().enumerate().zip(fact_sets);
+    for (((index, (member, ..)), facts), found) in members.zip(found) {
+        let in_place = |path: &mut Path| rename(path, &member.name);
         let renamed = |path: &Path| {
             let mut path = path.clone();
             rename(&mut path, &member.name);
@@ -525,42 +575,48 @@ fn merge(
             function.traits = function.traits.iter().map(renamed).collect();
             pending.impl_fns.push(function);
         }
-        merged.units.extend(facts.units.iter().map(renamed));
+        let renamed_all = |paths: Vec<Path>| {
+            paths.into_iter().map(|mut path| {
+                in_place(&mut path);
+                path
+            })
+        };
+        merged.units.extend(renamed_all(facts.units));
         merged.unit_lines.extend(&facts.unit_lines);
         let files = facts.unit_files.iter();
         merged
             .unit_files
             .extend(files.map(|file| sources::join(&member.dir, file)));
-        merged.items.extend(facts.items.iter().map(renamed));
-        merged.kinds.clone_from(&facts.kinds);
-        merged.markers.clone_from(&facts.markers);
-        for tag in &facts.tags {
-            if !merged.tags.contains(tag) {
-                merged.tags.push(tag.clone());
+        merged.items.extend(renamed_all(facts.items));
+        for tag in facts.tags {
+            if !merged.tags.contains(&tag) {
+                merged.tags.push(tag);
             }
         }
-        merged.item_kinds.clone_from(&facts.item_kinds);
-        merged.visibilities.clone_from(&facts.visibilities);
-        merged.relations.clone_from(&facts.relations);
-        merged.modifiers.clone_from(&facts.modifiers);
-        for declaration in &facts.declarations {
-            let mut declaration = declaration.clone();
-            declaration.path = renamed(&declaration.path);
-            declaration.unit = renamed(&declaration.unit);
+        merged.kinds = facts.kinds;
+        merged.markers = facts.markers;
+        merged.item_kinds = facts.item_kinds;
+        merged.visibilities = facts.visibilities;
+        merged.relations = facts.relations;
+        merged.modifiers = facts.modifiers;
+        for mut declaration in facts.declarations {
+            in_place(&mut declaration.path);
+            in_place(&mut declaration.unit);
             declaration.file = sources::join(&member.dir, &declaration.file);
             for tie in &mut declaration.relations {
-                tie.target = renamed(&tie.target);
+                in_place(&mut tie.target);
             }
             merged.declarations.push(declaration);
         }
-        for fact in &facts.facts {
-            let mut fact = fact.clone();
-            fact.unit = renamed(&fact.unit);
-            fact.item = fact.item.as_ref().map(renamed);
+        for mut fact in facts.facts {
+            in_place(&mut fact.unit);
+            if let Some(item) = &mut fact.item {
+                in_place(item);
+            }
             fact.file = sources::join(&member.dir, &fact.file);
             if let What::Reference(reference) = &mut fact.what {
-                reference.target = renamed(&reference.target);
-                reference.aliases = reference.aliases.iter().map(renamed).collect();
+                in_place(&mut reference.target);
+                reference.aliases.iter_mut().for_each(in_place);
                 let known: Vec<Path> = std::iter::once(&reference.target)
                     .chain(&reference.aliases)
                     .cloned()
