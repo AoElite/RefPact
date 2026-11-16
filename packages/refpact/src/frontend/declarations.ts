@@ -38,6 +38,11 @@ export const RELATIONS = [...TIES, "assignable-to"] as const;
 export interface Tie {
   readonly relation: (typeof TIES)[number];
   readonly node: Node;
+  /**
+   * For `import("./port").Port` in a heritage clause: the specifier of the module, and the
+   * name of the export. The compiler reads this form as a value, so the node gives no type.
+   */
+  readonly from?: { readonly specifier: Node; readonly name: string };
 }
 
 /** A top-level declaration of a file, before its names are resolved. */
@@ -64,6 +69,7 @@ interface Loose extends Node {
   readonly token?: number;
   readonly types?: readonly Loose[];
   readonly expression?: Loose;
+  readonly arguments?: readonly Loose[];
   readonly typeName?: Loose;
   readonly declarationList?: Loose;
   readonly declarations?: readonly Loose[];
@@ -111,6 +117,14 @@ function typeNames(type: Loose | undefined, found: Node[]): void {
     found.push(name);
   }
   type.forEachChild((child) => typeNames(child as Loose, found));
+}
+
+/** What `import("./port").Port` names, when the node is this form. */
+function inlineImport(node: Loose): Pick<Tie, "from"> {
+  const call = node.kind === K.PropertyAccessExpression ? node.expression : undefined;
+  const specifier = call?.kind === K.CallExpression && call.expression?.kind === K.ImportKeyword ? call.arguments?.[0] : undefined;
+  const name = identifier(node.name);
+  return specifier?.kind === K.StringLiteral && name !== undefined ? { from: { specifier, name } } : {};
 }
 
 /** The ties of a signature: the types of its parameters, without `this`, and its return type. */
@@ -213,7 +227,7 @@ export function collectDeclarations(sourceFile: SourceFile): Declared[] {
         // interface, as a type reference, which names its target in `typeName`.
         const target = named(type.expression ?? type.typeName);
         if (relation !== undefined && target !== undefined) {
-          ties.push({ relation, node: target });
+          ties.push({ relation, node: target, ...inlineImport(target) });
         }
       }
     }

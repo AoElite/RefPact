@@ -375,7 +375,8 @@ rule("no pools outside the db").items(allExcept("src/db/**")).ofType(anyOf("src/
   `Saved` but does not name it in `implements` is not assignable to `Saved` here.
 - **`returning`, `taking` and `ofType`** see each type that is named in the written type:
   `(order: Order, pool: db.Pool): Promise<Total>` takes `Order` and `db.Pool` and returns
-  `Total`. `typeof value` and `import("./x").Y` name types too.
+  `Total`. `typeof value` and `import("./x").Y` name types too, and `implements
+  import("./x").Y` names `Y` as an import of the type does.
 - **What counts as a function:** a `function`, and a variable whose value is an arrow
   function or a function expression. `ofType` reads the written type of a variable.
 - **What is no type here:** an inferred type, a type parameter, `this`, the global types

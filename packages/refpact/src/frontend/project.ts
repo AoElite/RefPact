@@ -522,7 +522,7 @@ function factsOfFile(
   const markers = collectMarkers(sourceFile, prune);
   const askedMarkers = markers.map((use) => (use.object !== undefined ? ask(use.object) : undefined));
   const declared = collectDeclarations(sourceFile);
-  const askedDeclared = declared.map((item) => ({ at: ask(item.at), ties: item.ties.map((tie) => ask(tie.node)) }));
+  const askedDeclared = declared.map((item) => ({ at: ask(item.at), ties: item.ties.map((tie) => ask(tie.from?.specifier ?? tie.node)) }));
   const symbols = project.symbolsAt(nodes);
   const symbol = (index: number | undefined): TsSymbol | undefined => (index === undefined ? undefined : symbols[index]);
 
@@ -700,7 +700,9 @@ function factsOfFile(
     const indexes = askedDeclared[index] as (typeof askedDeclared)[number];
     const relations: Relation[] = [];
     item.ties.forEach((tie, tieIndex) => {
-      const tied = symbol(indexes.ties[tieIndex]);
+      const asked = symbol(indexes.ties[tieIndex]);
+      // `import("./port").Port`: the symbol is that of the module, which has the export.
+      const tied = tie.from === undefined || asked === undefined ? asked : project.exportsOf(asked).get(tie.from.name);
       // A type parameter is no type of its own: `T` in `first<T>(items: T[]): T`.
       if (tied !== undefined && project.isTypeParameter(tied)) {
         return;

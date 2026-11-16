@@ -23,7 +23,7 @@ const files: Record<string, string[]> = {
     "function open(): void {}",
     "export const pool = 1, size = 2;",
   ],
-  "src/ui/view.ts": ['import * as port from "../domain/port";', "export class MemoryRepository implements port.Repository {}", "export default function render(): void {}"],
+  "src/ui/view.ts": ['import * as port from "../domain/port";', "export class MemoryRepository implements port.Repository {}", "export default function render(): void {}", 'export class Inline implements import("../domain/port").Repository {}'],
   "src/log.ts": ["export function log(target: unknown): void {}", "export type Level = string;", "export enum Color { Red }", "namespace Space {}"],
 };
 for (const [file, lines] of Object.entries(files)) {
@@ -63,19 +63,22 @@ it("the declarations of a project", () => {
     "src/log.ts#Space namespace local 4:11 []",
     "src/ui/view.ts#MemoryRepository class exported 2:14 [assignable-to src/domain/port.ts#Repository, implements src/domain/port.ts#Repository]",
     "src/ui/view.ts#render function exported 3:25 []",
+    "src/ui/view.ts#Inline class exported 4:14 [assignable-to src/domain/port.ts#Repository, implements src/domain/port.ts#Repository]",
   ]);
 });
 
 it("items that implement or extend", () => {
   const repositories = () => rule("repositories").items(all()).implementing(anyOf("src/domain/port.ts#Repository"));
-  expect(items(repositories().mustResideIn(anyOf("src/db/**")))).toEqual(["src/ui/view.ts#MemoryRepository"]);
-  expect(items(repositories().mustBeNamed("*Repository"))).toEqual(["src/db/repository.ts#Cache"]);
+  expect(items(repositories().mustResideIn(anyOf("src/db/**")))).toEqual(["src/ui/view.ts#MemoryRepository", "src/ui/view.ts#Inline"]);
+  // `implements import("..").Repository` names the interface as an import of the type does.
+  expect(items(repositories().mustBeNamed("*Repository"))).toEqual(["src/db/repository.ts#Cache", "src/ui/view.ts#Inline"]);
   expect(items(rule("emitters").items(all()).extending(anyOf(pkg("node:events"))).mustNotExist())).toEqual(["src/db/repository.ts#SqlRepository"]);
   expect(items(rule("decorated").items(all()).ofKind("class").mustBeDecoratedWith(anyOf("src/log.ts#log")))).toEqual([
     "src/db/repository.ts#Cache",
     "src/domain/order.ts#Entity",
     "src/domain/order.ts#Order",
     "src/ui/view.ts#MemoryRepository",
+    "src/ui/view.ts#Inline",
   ]);
   rule("orders are entities").items(anyOf("src/domain/order.ts")).named("Order").mustExtend(anyOf("src/domain/order.ts#Entity")).check(shop);
   rule("classes in db implement a port").items(anyOf("src/db/**")).ofKind("class").mustImplement(anyOf("src/domain/port.ts")).check(shop);
