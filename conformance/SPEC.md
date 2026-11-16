@@ -589,6 +589,24 @@ digraph {
 
 In a label, `\` is written as `\\` and `"` as `\"`.
 
+`markdown` is the text of a Markdown file: a line ` ```mermaid `, the `mermaid` text, and a
+line ` ``` `.
+
+**Files.** A binding can check a *diagram file*: a file whose whole text is the diagram of a
+rule. The extension of the name of the file, in upper or lower case, gives the format: `.md` is `markdown`, `.mmd`
+and `.mermaid` are `mermaid`, and `.dot` and `.gv` are `dot`. A name with another extension,
+or with none, is a failure. The file is *current* when its text, with each `\r\n` read as
+`\n`, is the diagram. A file that is not current, or is not there, is a failure with this
+report:
+
+```
+rule `<name>`: the diagram <file> is not the diagram of the code.
+Run the tests with REFPACT_DIAGRAM=update to write the diagram again.
+```
+
+When the environment variable `REFPACT_DIAGRAM` is `update`, the check writes the diagram
+to a file that is not current, and passes. A file that is current is not written. The errors of the diagram come before the file is read or written.
+
 ## 5. Errors
 
 A rule that cannot fail is an error, not a pass. Evaluation returns errors and no violations
@@ -778,7 +796,7 @@ Each file in `cases/` is one object:
   Exactly one of the constraints is present.
 - A case can have `"baseline": "text"`, a baseline file as one string (section 7). Then the
   expectation is checked after the baseline is applied.
-- A case can have `"diagram": "mermaid" | "dot"`. Then the case is about the diagram of the
+- A case can have `"diagram": "mermaid" | "dot" | "markdown"`. Then the case is about the diagram of the
   rule (section 4.17), and the expectation is `{ "diagram": "text" }`, which must be equal to
   the text, or `{ "errors": [...] }`. The case can also have `"layers": [{ "name": "...",
   "units": [pattern, ...], "must_not_use": [position, ...] }, ...]`; an absent
@@ -904,6 +922,8 @@ names the handle, so that a large fact set crosses the boundary once and not for
 | `select` | `handle`, `rule` with a `custom` constraint or a `custom` demand | `{ ok: true, subjects, units, references, markers, declarations, items }` or `{ ok: false, errors }` |
 | `graph` | `handle`, `rule` as for `select`, `subjects`, `tangles` | `{ ok: true, nodes, edges }`, `{ ok: true, tangles }` or `{ ok: false, errors }` |
 | `diagram` | `handle`, `rule`, `slices`, `layers`, `format` | `{ ok: true, text }` or `{ ok: false, errors }` |
+| `diagram-format` | `file` (the name of a diagram file) | `{ format }`, or `{}` when the name gives no format |
+| `render-stale-diagram` | `rule` (the name), `file` (the name of the diagram file) | `{ text }` |
 | `print-path` | `path`, `format` | `{ text }` |
 | `render-violation` | `violation`, `format` | `{ text }` |
 | `render-violations` | `rule` (the name), `reason`, `severity`, `violations`, `format` | `{ text }` |
@@ -978,7 +998,7 @@ for a graph only when its check uses it.
 read, so it can be a check of the binding. The binding sends the slices of the diagram as
 `slices`, or the layers as `layers`: `[{ name, units: [pattern, ...], mustNotUse: [position,
 ...] }, ...]`, where an absent `mustNotUse` is `[]`. Both may be absent, and a request with
-both is not valid. `format` is `"mermaid"` (the default when it is absent) or `"dot"`. The path format is that of the fact set.
+both is not valid. `format` is `"mermaid"` (the default when it is absent), `"dot"` or `"markdown"`. The path format is that of the fact set.
 
 A request that is not valid is not answered. The reason names the value: `facts.facts[3].line:
 expected a whole number`, `` unknown request `fly` ``, `no fact set has the handle 2`. Errors in

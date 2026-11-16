@@ -33,6 +33,7 @@
 pub use refpact_core as core;
 
 mod baseline;
+mod diagram;
 mod filters;
 mod group;
 mod items;
@@ -561,7 +562,7 @@ impl Rule {
         krate.prepared().evaluate(&self.rule)
     }
 
-    /// A diagram of what the rule sees, in Mermaid or DOT. The nodes are the modules of the
+    /// A diagram of what the rule sees, in Mermaid, DOT or Markdown. The nodes are the modules of the
     /// rule, or its slices when the rule is about slices, such as
     /// [`Scoped::must_be_acyclic_between`]. An edge is a reference between two nodes that
     /// the filters and the exemptions of the rule let pass. The modules and references of a
@@ -598,6 +599,32 @@ impl Rule {
             _ => DiagramNodes::Subjects,
         };
         self.draw(krate, nodes, format)
+    }
+
+    /// Like [`Rule::check_diagram`], but the failure is a value.
+    pub fn verify_diagram(
+        &self,
+        krate: &Crate,
+        file: impl AsRef<std::path::Path>,
+    ) -> Result<(), Failure> {
+        let draw = |format| self.diagram(krate, format);
+        diagram::verify(&self.rule.name, file.as_ref(), draw)
+    }
+
+    /// Fails the test when the file does not hold the [diagram](Rule::diagram) of the rule,
+    /// so a diagram that is committed with the code stays current.
+    ///
+    /// The name of the file gives the format: `.md` is a Markdown file with the Mermaid
+    /// diagram in a block ` ```mermaid `, `.mmd` and `.mermaid` are Mermaid, `.dot` and `.gv`
+    /// are DOT. The diagram is the whole file. When the environment variable
+    /// `REFPACT_DIAGRAM` is `update`, this writes the diagram to the file and passes.
+    ///
+    /// In a test, use `concat!(env!("CARGO_MANIFEST_DIR"), "/docs/modules.md")`.
+    #[track_caller]
+    pub fn check_diagram(&self, krate: &Crate, file: impl AsRef<std::path::Path>) {
+        if let Err(failure) = self.verify_diagram(krate, file) {
+            panic!("{failure}");
+        }
     }
 
     /// The diagram of the rule with these nodes.
@@ -763,6 +790,18 @@ pub enum Failure {
         /// What went wrong.
         message: String,
     },
+    /// The diagram file does not hold the diagram of the rule. See [`Rule::check_diagram`].
+    StaleDiagram {
+        /// The name of the rule.
+        rule: String,
+        /// The diagram file.
+        file: String,
+    },
+    /// The diagram file cannot be read or written, or its name gives no format.
+    Diagram {
+        /// What went wrong.
+        message: String,
+    },
     /// A group of rules cannot fail as written, for example layers with one layer only.
     Malformed {
         /// The name of the group.
@@ -796,7 +835,10 @@ impl fmt::Display for Failure {
                 file,
                 entries,
             } => f.write_str(&crate::core::render_stale(rule, file, entries)),
-            Failure::Baseline { message } => f.write_str(message),
+            Failure::StaleDiagram { rule, file } => {
+                f.write_str(&crate::core::render_stale_diagram(rule, file))
+            }
+            Failure::Baseline { message } | Failure::Diagram { message } => f.write_str(message),
             Failure::Malformed { rule, message } => {
                 write!(f, "rule `{rule}` cannot be checked:\n  {message}")
             }

@@ -92,8 +92,11 @@ export function tangles(rule: Rule, facts: FactSet, subjects: boolean): TanglesR
   return request("graph", { handle: handleOf(facts), rule, subjects, tangles: true });
 }
 
-/** The text form of a diagram: a Mermaid flowchart, or a Graphviz graph in DOT. */
-export type DiagramFormat = "mermaid" | "dot";
+/**
+ * The text form of a diagram: a Mermaid flowchart, a Graphviz graph in DOT, or the Mermaid
+ * flowchart in a fenced block ` ```mermaid `, which is the text of a Markdown file.
+ */
+export type DiagramFormat = "mermaid" | "dot" | "markdown";
 
 /** The diagram of a rule, or the reasons why the rule cannot be evaluated. */
 export type DiagramResult =
@@ -141,6 +144,20 @@ export type DiagramNodes =
  */
 export function diagram(rule: Rule, facts: FactSet, nodes: DiagramNodes, format: DiagramFormat = "mermaid"): DiagramResult {
   return request("diagram", { handle: handleOf(facts), rule, ...nodes, format });
+}
+
+/**
+ * The format of a diagram in a file, by the extension of its name: `.md` is `markdown`,
+ * `.mmd` and `.mermaid` are `mermaid`, `.dot` and `.gv` are `dot`. `undefined`: the name has
+ * another extension, or none.
+ */
+export function diagramFormat(file: string): DiagramFormat | undefined {
+  return request<{ format?: DiagramFormat }>("diagram-format", { file }).format;
+}
+
+/** The report of a diagram file whose text is not the diagram of the rule. */
+export function renderStaleDiagram(rule: string, file: string): string {
+  return request<{ text: string }>("render-stale-diagram", { rule, file }).text;
 }
 
 /** Prints a path as reports print it. */

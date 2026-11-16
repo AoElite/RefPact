@@ -22,6 +22,8 @@ pub enum DiagramFormat {
     Mermaid,
     /// A Graphviz graph in the DOT language.
     Dot,
+    /// The Mermaid flowchart in a fenced block ` ```mermaid `: the text of a Markdown file.
+    Markdown,
 }
 
 impl DiagramFormat {
@@ -30,8 +32,31 @@ impl DiagramFormat {
         match self {
             DiagramFormat::Mermaid => "mermaid",
             DiagramFormat::Dot => "dot",
+            DiagramFormat::Markdown => "markdown",
         }
     }
+
+    /// The format of a diagram in a file, by the extension of its name, in upper or lower case: `.md` is
+    /// [`Markdown`](DiagramFormat::Markdown), `.mmd` and `.mermaid` are
+    /// [`Mermaid`](DiagramFormat::Mermaid), `.dot` and `.gv` are
+    /// [`Dot`](DiagramFormat::Dot). `None`: the name has another extension, or none.
+    pub fn of_file(name: &str) -> Option<DiagramFormat> {
+        let (_, extension) = name.rsplit_once('.')?;
+        match extension.to_ascii_lowercase().as_str() {
+            "md" => Some(DiagramFormat::Markdown),
+            "mmd" | "mermaid" => Some(DiagramFormat::Mermaid),
+            "dot" | "gv" => Some(DiagramFormat::Dot),
+            _ => None,
+        }
+    }
+}
+
+/// The report of a diagram file whose text is not the diagram of the rule (SPEC 4.17).
+pub fn render_stale_diagram(rule: &str, file: &str) -> String {
+    format!(
+        "rule `{rule}`: the diagram {file} is not the diagram of the code.\n\
+         Run the tests with REFPACT_DIAGRAM=update to write the diagram again."
+    )
 }
 
 /// A layer of a diagram of layers: see [`DiagramNodes::Layers`].
@@ -122,13 +147,16 @@ impl Check for Draw<'_> {
         Box::new(move |scope: &Scope<'_>| -> Vec<Violation> {
             let picture = match &valid {
                 ValidNodes::Graph(slices) => {
-                    graph_picture(&scope.graph(slices.as_ref()), &self.path_format)
+                    graph_picture(&scope.subject_graph(slices.as_ref()), &self.path_format)
                 }
                 ValidNodes::Layers(layers, patterns) => layer_picture(scope, layers, patterns),
             };
             *self.text.borrow_mut() = match self.format {
                 DiagramFormat::Mermaid => mermaid(self.name, &picture),
                 DiagramFormat::Dot => dot(self.name, &picture),
+                DiagramFormat::Markdown => {
+                    format!("```mermaid\n{}```\n", mermaid(self.name, &picture))
+                }
             };
             Vec::new()
         })
@@ -291,5 +319,18 @@ mod tests {
     fn labels_escape_what_mermaid_reads() {
         assert_eq!(mermaid_label("a#\"<b>"), "a#35;#quot;#lt;b#gt;");
         assert_eq!(dot_text("a\\\"b"), "a\\\\\\\"b");
+    }
+
+    #[test]
+    fn the_extension_of_a_file_gives_the_format() {
+        let formats =
+            ["docs/A.MD", "a.mmd", "a.b.mermaid", "a.dot", "a.gv"].map(DiagramFormat::of_file);
+        let names = formats.map(|format| format.map(DiagramFormat::as_str));
+        assert_eq!(
+            names,
+            ["markdown", "mermaid", "mermaid", "dot", "dot"].map(Some)
+        );
+        assert_eq!(DiagramFormat::of_file("a.txt"), None);
+        assert_eq!(DiagramFormat::of_file("md"), None);
     }
 }

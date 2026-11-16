@@ -4,6 +4,7 @@ import { isBuiltin } from "node:module";
 import type { Baseline } from "./baseline.ts";
 import { applyBaseline, diagram, evaluate, graph, renderErrors, renderStale, renderViolations, select, tangles } from "./core/index.ts";
 import type { DiagramFormat, DiagramNodes } from "./core/index.ts";
+import { verifyDiagram } from "./diagram.ts";
 import type {
   Constraint,
   CustomConstraint,
@@ -578,6 +579,8 @@ function typesPackage(name: string): string {
  * - `invalid`: the rule cannot fail as written, for example because a pattern matches nothing.
  * - `stale-baseline`: the baseline accepts violations that the code no longer has.
  * - `baseline`: the baseline file cannot be read or written.
+ * - `stale-diagram`: the diagram file does not hold the diagram of the rule.
+ * - `diagram`: the diagram file cannot be read or written, or its name gives no format.
  * - `malformed`: a rule or a group of rules cannot fail as written, for example layers with one layer only.
  * - `several`: several rules of one group did not pass.
  */
@@ -619,6 +622,20 @@ export type Failure =
       readonly message: string;
     }
   | {
+      readonly type: "stale-diagram";
+      /** The name of the rule. */
+      readonly rule: string;
+      /** The diagram file. */
+      readonly file: string;
+      /** The report. */
+      readonly message: string;
+    }
+  | {
+      readonly type: "diagram";
+      /** What went wrong. */
+      readonly message: string;
+    }
+  | {
       readonly type: "malformed";
       /** The name of the rule or of the group. */
       readonly rule: string;
@@ -640,6 +657,18 @@ function answered<T extends { readonly ok: boolean }>(rule: string, answer: T | 
     throw new ArchitectureError({ type: "invalid", rule, errors, message: renderErrors(rule, errors) });
   }
   return answer as Extract<T, { ok: true }>;
+}
+
+/** What `make` gives, or the failure of the {@link ArchitectureError} that it throws. @internal */
+export function orFailure<T>(make: () => T): T | Failure {
+  try {
+    return make();
+  } catch (error) {
+    if (error instanceof ArchitectureError) {
+      return error.failure;
+    }
+    throw error;
+  }
 }
 
 /** The error that `check` throws. Its message is the report. */
@@ -729,14 +758,9 @@ export class ImportRule {
   /** The violations, or the reason why the rule cannot be evaluated. */
   private found(project: Project): readonly Violation[] | Failure {
     const rule = this.rule.name;
-    let result: ReturnType<ImportRule["evaluate"]>;
-    try {
-      result = this.evaluate(project);
-    } catch (error) {
-      if (error instanceof ArchitectureError) {
-        return error.failure;
-      }
-      throw error;
+    const result = orFailure(() => this.evaluate(project));
+    if ("type" in result) {
+      return result;
     }
     if (!result.ok) {
       return { type: "invalid", rule, errors: result.errors, message: renderErrors(rule, result.errors) };
@@ -745,7 +769,7 @@ export class ImportRule {
   }
 
   /**
-   * A diagram of what the rule sees, in Mermaid (the default) or DOT. The nodes are the files
+   * A diagram of what the rule sees, in Mermaid (the default), DOT or Markdown. The nodes are the files
    * of the rule, or its slices when the rule is about slices, such as
    * {@link ScopedRule.mustBeAcyclicBetween}. An edge is an import between two nodes that the
    * filters and the exemptions of the rule let pass. The files and imports of a cycle are
@@ -757,13 +781,37 @@ export class ImportRule {
    *
    * ```ts
    * const text = rule("the features").files(all()).mustBeAcyclicBetween(anyOf("src/features/*")).diagram(app);
-   * writeFileSync("docs/features.md", `\`\`\`mermaid\n${text}\`\`\`\n`);
    * ```
    */
   diagram(project: Project, format: DiagramFormat = "mermaid"): string {
     const { constraint } = this.rule;
     const slices = constraint.type === "must-be-acyclic" || constraint.type === "must-be-independent" ? constraint.slices : undefined;
     return this.draw(project, slices === undefined ? undefined : { slices }, format);
+  }
+
+  /** Like {@link ImportRule.checkDiagram}, but returns the failure, or `undefined` when the file is current. */
+  verifyDiagram(project: Project, file: string): Failure | undefined {
+    return verifyDiagram(this.rule.name, file, (format) => orFailure(() => this.diagram(project, format)));
+  }
+
+  /**
+   * Throws an {@link ArchitectureError} when the file does not hold the
+   * {@link ImportRule.diagram | diagram} of the rule, so a diagram that is committed with the
+   * code stays current.
+   *
+   * The name of the file gives the format: `.md` is a Markdown file with the Mermaid diagram
+   * in a block ` ```mermaid `, `.mmd` and `.mermaid` are Mermaid, `.dot` and `.gv` are DOT.
+   * The diagram is the whole file. When the environment variable `REFPACT_DIAGRAM` is
+   * `update`, this writes the diagram to the file and passes.
+   *
+   * A relative path is relative to the working directory; in a test, give a path from
+   * `import.meta.dirname`.
+   */
+  checkDiagram(project: Project, file: string): void {
+    const failure = this.verifyDiagram(project, file);
+    if (failure !== undefined) {
+      throw new ArchitectureError(failure);
+    }
   }
 
   /** @internal The diagram of the rule with these nodes. */

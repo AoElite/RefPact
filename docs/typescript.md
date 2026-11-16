@@ -179,7 +179,8 @@ rule(name)
     .check(project)                    throws ArchitectureError with a report
   | .verify(project)                   Failure | undefined
   | .evaluate(project)                 { ok: true, violations } | { ok: false, errors }
-  | .diagram(project, "mermaid" | "dot")   the graph that the rule sees, as text
+  | .diagram(project, "mermaid" | "dot" | "markdown")   the graph that the rule sees, as text
+  | .checkDiagram(project, "file")     throws when the file is not the diagram of the rule
   | .checkWithBaseline(project, baseline("file"))    as check, with accepted violations
 
 rules(name, rule, ..).check(project)   checks all, reports every rule that fails
@@ -650,15 +651,29 @@ and `evaluate` gives the violations of a warning as of any rule.
 
 `diagram` draws what a rule sees, as in [Rust](rust.md#diagrams): the files of the rule, or
 its slices, and the imports between them, with the files and imports of a cycle in red. The
-format is `"mermaid"` (the default) or `"dot"`. A rule that cannot fail as written throws an
-`ArchitectureError`.
+format is `"mermaid"` (the default), `"dot"` or `"markdown"`, which is the Mermaid text in a
+block ` ```mermaid `. A rule that cannot fail as written throws an `ArchitectureError`.
 
 ```ts
 const text = rule("the features").files(all()).mustBeAcyclicBetween(anyOf("src/features/*")).diagram(app);
-writeFileSync("docs/features.md", `\`\`\`mermaid\n${text}\`\`\`\n`);
 ```
 
-`layers(..)` and `onionArchitecture(..)` have `diagram` too: one node for each layer, from the
+`checkDiagram` keeps a diagram that is committed with the code current, as in
+[Rust](rust.md#diagrams). It throws when the file does not hold the diagram of the rule. The
+name of the file gives the format: `.md`, `.mmd` and `.mermaid`, or `.dot` and `.gv`.
+`verifyDiagram` returns the failure: `stale-diagram`, or `diagram` when the file cannot be
+read or written or its name gives no format.
+
+```ts
+rule("the features").files(all()).mustBeAcyclicBetween(anyOf("src/features/*")).checkDiagram(app, path.join(import.meta.dirname, "../docs/features.md"));
+```
+
+```sh
+REFPACT_DIAGRAM=update pnpm test    # writes each diagram file that is not current
+```
+
+`layers(..)` and `onionArchitecture(..)` have `diagram`, `checkDiagram` and `verifyDiagram`
+too: one node for each layer, from the
 top to the bottom, and the imports between them. An import that the layers forbid is red. A
 file is in the first layer that matches it, and a file in no layer is not drawn.
 
@@ -695,7 +710,7 @@ rule("a file imports at most ten files")
 | `subjects` | the files that the rule selects |
 | `imports` | the imports that the rule sees, of all files, in the order of the facts. Each has `fact`, `reference`, `file`, `subject` (whether the rule selects the file), `paths` and `owners`, the file of each path or `undefined` for a package. |
 | `markers`, `declarations` | the markers and the declarations of the selected files that the rule sees |
-| `graph()`, `subjectGraph()` | the graph of all files, and the graph of the selected files only: `unit_graph()` and `graph(None)` of a [Rust check](rust.md#graphs-in-a-check). `edgesOf(file)` are the files that a file imports, `chain(from, isEnd)` is a shortest chain of imports to the nearest file that is an end, and `tangles()` are the groups of files that all reach each other, each with its `members` and a shortest `cycle`. The tangles of `subjectGraph()` are the cycles that `mustBeAcyclic` reports. A check in TypeScript has no graph of slices |
+| `fileGraph()`, `subjectGraph()` | the graph of all files, and the graph of the selected files only: `unit_graph()` and `subject_graph(None)` of a [Rust check](rust.md#graphs-in-a-check). `edgesOf(file)` are the files that a file imports, `chain(from, isEnd)` is a shortest chain of imports to the nearest file that is an end, and `tangles()` are the groups of files that all reach each other, each with its `members` and a shortest `cycle`. The tangles of `subjectGraph()` are the cycles that `mustBeAcyclic` reports. A check in TypeScript has no graph of slices |
 | `matched(name)` | the files that a list of file patterns of the check matches |
 | `violationAt(fact, message, key?)`, `violationOfItem(item, message, key?)`, `violationOfFile(file, message, key?)` | a violation at the place of a fact or of an item, or about a file as a whole |
 
@@ -714,7 +729,7 @@ counts: with `ignoringTypeImports()`, the numbers are those of the code that run
 rule("a file that many files import is stable")
   .files(anyOf("src/**"))
   .mustSatisfy((scope) => {
-    const graph = scope.graph();
+    const graph = scope.fileGraph();
     const importers = new Map<string, number>();
     for (const file of scope.facts.units) {
       for (const edge of graph.edgesOf(file)) {

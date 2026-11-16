@@ -4653,7 +4653,7 @@ rule `r` cannot be checked:
 
 ## 25-diagrams.json
 
-Diagrams (section 4.17): the graph that a rule sees, as Mermaid or DOT text. The constraint of the rule is not evaluated; only the slices of `must_be_acyclic` and `must_be_independent`, or the `layers` of the case, change the nodes.
+Diagrams (section 4.17): the graph that a rule sees, as Mermaid, DOT or Markdown text. The constraint of the rule is not evaluated; only the slices of `must_be_acyclic` and `must_be_independent`, or the `layers` of the case, change the nodes.
 
 Paths are printed with the separator `::`.
 
@@ -4726,6 +4726,32 @@ digraph {
     n4 -> n3;
 }
 ```
+
+### the same graph in Markdown: the Mermaid text in a fenced block
+
+```json
+{"must_be_acyclic":{},"name":"r","subjects":{"any_of":["crate::api","crate::db"]}}
+```
+
+The case asks for the diagram in `markdown`.
+
+Result:
+
+````markdown
+```mermaid
+---
+title: "r"
+---
+flowchart LR
+    n0["crate::api"]
+    n1["crate::db"]
+    n0 --> n1
+    n1 --> n0
+    classDef cycle stroke:#d62728,stroke-width:2px
+    class n0,n1 cycle
+    linkStyle 0,1 stroke:#d62728,stroke-width:2px
+```
+````
 
 ### a diagram has the edges that the filters let pass
 

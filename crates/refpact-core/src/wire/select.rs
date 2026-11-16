@@ -132,7 +132,7 @@ impl Check for GraphAnswer {
 /// the paths of the fact.
 fn graph_text(scope: &Scope, subjects: bool, tangles: bool) -> String {
     let graph = if subjects {
-        scope.graph(None)
+        scope.subject_graph(None)
     } else {
         scope.unit_graph()
     };

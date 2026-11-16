@@ -58,9 +58,9 @@ it("the source does not import the tests or the test runner", () => {
     .check(self);
 });
 
-it("only the project loader, the component files, the baseline, the dependencies and the loader of the core read the file system", () => {
-  rule("only the project loader, the component files, the baseline, the dependencies and the loader of the core read the file system")
-    .files(anyOf("src/**").except("src/frontend/project.ts", "src/frontend/components.ts", "src/baseline.ts", "src/frontend/dependencies.ts", "src/core/wasm.ts"))
+it("only the project loader, the component files, the baseline, the diagram file, the dependencies and the loader of the core read the file system", () => {
+  rule("only the project loader, the component files, the baseline, the diagram file, the dependencies and the loader of the core read the file system")
+    .files(anyOf("src/**").except("src/frontend/project.ts", "src/frontend/components.ts", "src/baseline.ts", "src/diagram.ts", "src/frontend/dependencies.ts", "src/core/wasm.ts"))
     .mustNotImport(anyOf(pkg("node:fs"), pkg("node:child_process")))
     .check(self);
 });

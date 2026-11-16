@@ -39,9 +39,10 @@ const BUILT_IN_CHECKS: [&str; 5] = [
     "refpact_core::demands",
 ];
 
-const BINDING: [&str; 6] = [
+const BINDING: [&str; 7] = [
     "refpact",
     "refpact::baseline",
+    "refpact::diagram",
     "refpact::group",
     "refpact::items",
     "refpact::layers",
@@ -194,8 +195,8 @@ fn the_binding_does_not_parse() {
 }
 
 #[test]
-fn only_the_baseline_reads_and_writes_files_in_the_binding() {
-    rule("only the baseline reads and writes files in the binding")
+fn only_the_baseline_and_the_diagram_file_read_and_write_files_in_the_binding() {
+    rule("only the baseline and the diagram file read and write files in the binding")
         .modules(any_of([
             "refpact",
             "refpact::group",
@@ -226,6 +227,7 @@ fn the_parts_are_layers_and_the_core_reaches_no_file() {
             "binding",
             any_of([
                 "refpact::baseline",
+                "refpact::diagram",
                 "refpact::group",
                 "refpact::items",
                 "refpact::layers",
@@ -316,9 +318,9 @@ fn the_rules_above_can_fail() {
         .unwrap();
     assert!(!front_end.is_empty());
 
-    // The layers of the binding reach the file system through the baseline.
+    // The groups of the binding reach the file system through the baseline.
     let chain = rule("probe")
-        .modules(any_of(["refpact::layers"]))
+        .modules(any_of(["refpact::group"]))
         .must_not_reach(any_of(["std::fs"]))
         .evaluate(&REFPACT)
         .unwrap();

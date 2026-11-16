@@ -649,7 +649,6 @@ let text = rule("the parts of the crate")
     .must_be_acyclic_between(any_of(["crate::*"]))
     .diagram(&app, DiagramFormat::Mermaid)
     .unwrap();
-std::fs::write("docs/architecture.md", format!("```mermaid\n{text}```\n")).unwrap();
 ```
 
 ```mermaid
@@ -675,8 +674,29 @@ flowchart LR
   rule that the code breaks draws its graph too.
 - A rule that cannot fail as written gives `Failure::Invalid`, as `verify` does. A graph of
   one node is no error.
-- A diagram is a snapshot, not a check. A test that writes the file keeps it up to date; one
-  that compares the file with the text fails when the architecture changes.
+
+`check_diagram` keeps a diagram that is committed with the code current. The test fails
+when the file does not hold the diagram of the rule, so a change of the architecture shows
+in the diagram, and in the review of the change:
+
+```rust
+rule("the parts of the crate")
+    .modules(all())
+    .must_be_acyclic_between(any_of(["crate::*"]))
+    .check_diagram(&app, concat!(env!("CARGO_MANIFEST_DIR"), "/docs/architecture.md"));
+```
+
+```sh
+REFPACT_DIAGRAM=update cargo test    # writes each diagram file that is not current
+```
+
+- The name of the file gives the format: `.md` is a Markdown file with the Mermaid diagram
+  in a block ` ```mermaid `, `.mmd` and `.mermaid` are Mermaid, `.dot` and `.gv` are DOT.
+  `DiagramFormat::Markdown` gives the text of the `.md` file from `diagram`.
+- The diagram is the whole file. A file that is not there is not current.
+- `check_diagram` does not check the constraint of the rule. Call `check` for that.
+- `verify_diagram` gives the failure as a value: `Failure::StaleDiagram`, or
+  `Failure::Diagram` when the file cannot be read or written or its name gives no format.
 
 `layers(..)` and `onion_architecture(..)` draw the whole architecture in one diagram, from
 the top to the bottom. Each layer is a node, and an edge is a use between two layers. A use
@@ -707,7 +727,8 @@ flowchart TB
 
 A module is in the first layer that matches it. A module in no layer is not drawn.
 `except_in_test_code()`, `strict()`, `may_only_use` and `may_only_be_used_by` apply to the
-diagram as they do to the rules.
+diagram as they do to the rules. Layers and an onion architecture have `check_diagram` and
+`verify_diagram` too.
 
 ### Rules of your own
 
@@ -758,7 +779,7 @@ What a `Scope` has:
 | `owners(&seen)` | each path of a reference with the module that has it |
 | `hit(&seen, patterns)` | the first path of a reference that a pattern covers, outside the own module |
 | `markers()`, `declarations()` | the unsafe markers and the items of the selected modules that the rule sees |
-| `unit_graph()`, `graph(slices)` | the graph of all modules, and the graph of the selected modules or of their slices. See [graphs](#graphs-in-a-check) |
+| `unit_graph()`, `subject_graph(slices)` | the graph of all modules, and the graph of the selected modules or of their slices. See [graphs](#graphs-in-a-check) |
 | `violation_at(fact, detail)`, `violation_of_item(item, detail)`, `violation_of_unit(unit, detail)` | a violation at the place of a fact or of an item, or about a module as a whole |
 
 - `Detail::custom(message)` prints the message after the module. A baseline counts the
@@ -846,7 +867,7 @@ six built-in demands, such as `must_reside_in`, are item checks of this kind.
 #### Graphs in a check
 
 A check can search the graphs that the cycle and chain rules search. `unit_graph()` has one
-node for each module. `graph(slices)` has one node for each selected module, or for each of
+node for each module. `subject_graph(slices)` has one node for each selected module, or for each of
 their slices from `Setup::slices`.
 
 | Method of the graph | Gives |
@@ -911,7 +932,7 @@ rule `a module that many modules use is stable` is violated in 1 place(s):
   src/config.rs: [a module that many modules use is stable] crate::config is used by 31 modules and uses 40: instability 0.56
 ```
 
-For the metrics of larger parts, such as crates or features, take `graph(slices)` with the
+For the metrics of larger parts, such as crates or features, take `subject_graph(slices)` with the
 slices of `Setup::slices` in a `Check`.
 
 #### Rule sets of your own

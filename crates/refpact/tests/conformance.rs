@@ -24,7 +24,7 @@ use refpact::core::{
 use serde_json::{json, Value};
 
 /// The number of cases the directory holds. A harness that runs fewer cases must fail.
-const EXPECTED_CASES: usize = 302;
+const EXPECTED_CASES: usize = 303;
 
 /// The case files in the order of their names: the file name and the content.
 fn case_files() -> Vec<(String, Value)> {
@@ -989,9 +989,14 @@ fn declarations_table(facts: &FactSet, separator: &str) -> String {
     text
 }
 
-/// A text as a fenced block. The text of a report has no fence of its own.
+/// A text as a fenced block. A text with a fence of its own, such as a diagram in Markdown,
+/// gets a longer fence, so that its fence does not end the block.
 fn block(language: &str, text: &str) -> String {
-    format!("```{language}\n{}\n```\n", text.trim_end_matches('\n'))
+    let fence = if text.contains("```") { "````" } else { "```" };
+    format!(
+        "{fence}{language}\n{}\n{fence}\n",
+        text.trim_end_matches('\n')
+    )
 }
 
 /// What one case gives: the report of the rule, after the baseline when the case has one.
@@ -1071,7 +1076,7 @@ fn diagram_layers(case: &Value, separator: &str) -> Option<Vec<DiagramLayer>> {
     )
 }
 
-/// The diagram that a case asks for with `"diagram": "mermaid"` or `"dot"`, if it asks.
+/// The diagram that a case asks for with `"diagram": "mermaid"`, `"dot"` or `"markdown"`, if it asks.
 fn diagram(
     case: &Value,
     rule: &Rule,
@@ -1081,6 +1086,7 @@ fn diagram(
     let format = match case["diagram"].as_str()? {
         "mermaid" => DiagramFormat::Mermaid,
         "dot" => DiagramFormat::Dot,
+        "markdown" => DiagramFormat::Markdown,
         other => panic!("unknown diagram format {other}"),
     };
     let layers = diagram_layers(case, separator);

@@ -8,7 +8,7 @@ import { RuleSet } from "./group.ts";
 import { layers, Layers } from "./layers.ts";
 import type { DiagramFormat } from "./core/index.ts";
 import type { Project } from "./frontend/project.ts";
-import type { AnyOf, Files, ImportRule } from "./rules.ts";
+import type { AnyOf, Failure, Files, ImportRule } from "./rules.ts";
 
 interface Parts {
   readonly name: string;
@@ -127,6 +127,19 @@ export class Onion extends RuleSet {
   /** A diagram of the parts as layers. See {@link Layers.diagram}. */
   diagram(project: Project, format: DiagramFormat = "mermaid"): string {
     return this.asLayers().diagram(project, format);
+  }
+
+  /** Like {@link Onion.checkDiagram}, but returns the failure, or `undefined` when the file is current. */
+  verifyDiagram(project: Project, file: string): Failure | undefined {
+    return this.asLayers().verifyDiagram(project, file);
+  }
+
+  /**
+   * Throws an {@link ArchitectureError} when the file does not hold the
+   * {@link Onion.diagram | diagram} of the parts. See {@link ImportRule.checkDiagram}.
+   */
+  checkDiagram(project: Project, file: string): void {
+    this.asLayers().checkDiagram(project, file);
   }
 
   /** The rules of the architecture. See {@link Layers.rules}. */

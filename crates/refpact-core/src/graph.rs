@@ -1,5 +1,5 @@
 //! Graphs of units or of slices: what the checks about cycles and chains share (SPEC 4.5 to
-//! 4.9). A check gets a graph from [`crate::Scope::graph`] or [`crate::Scope::unit_graph`].
+//! 4.9). A check gets a graph from [`crate::Scope::subject_graph`] or [`crate::Scope::unit_graph`].
 
 use std::borrow::Cow;
 use std::collections::VecDeque;

@@ -1,4 +1,5 @@
-//! The baseline file: the only part of this crate that reads and writes files.
+//! The baseline file. This module and that of the diagram file are the only parts of this
+//! crate that write files.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -22,6 +23,13 @@ pub struct Baseline {
 
 /// Tests of one binary run on several threads, and several rules can share one file.
 static WRITING: Mutex<()> = Mutex::new(());
+
+/// Held while a file is written, so that two tests do not write one file at the same time.
+pub(crate) fn writing() -> std::sync::MutexGuard<'static, ()> {
+    WRITING
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 pub(crate) fn update_requested() -> bool {
     std::env::var("REFPACT_BASELINE").is_ok_and(|value| value == "update")
@@ -69,25 +77,29 @@ impl Baseline {
 
     /// Replaces the entries of one rule with its current violations.
     pub(crate) fn write(&self, rule: &str, violations: &[Violation]) -> Result<(), Failure> {
-        let _guard = WRITING
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = writing();
         let mut entries = self.read()?;
         entries.retain(|entry| entry.rule != rule);
         entries.extend(crate::core::baseline_entries(
             violations,
             &PathFormat::plain("::"),
         ));
-        let failed = |error: std::io::Error| Failure::Baseline {
-            message: format!("cannot write {}: {error}", self.display()),
-        };
-        if let Some(dir) = self.path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
-            std::fs::create_dir_all(dir).map_err(failed)?;
-        }
-        // Written beside the file and moved, so that a reader never sees half a file.
-        let mut partial = self.path.clone().into_os_string();
-        partial.push(".partial");
-        std::fs::write(&partial, crate::core::format_baseline(&entries)).map_err(failed)?;
-        std::fs::rename(&partial, &self.path).map_err(failed)
+        write_file(&self.path, &crate::core::format_baseline(&entries)).map_err(|error| {
+            Failure::Baseline {
+                message: format!("cannot write {}: {error}", self.display()),
+            }
+        })
     }
+}
+
+/// Writes a file, and the directory of the file when it is not there.
+pub(crate) fn write_file(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir)?;
+    }
+    // Written beside the file and moved, so that a reader never sees half a file.
+    let mut partial = path.to_path_buf().into_os_string();
+    partial.push(".partial");
+    std::fs::write(&partial, text)?;
+    std::fs::rename(&partial, path)
 }

@@ -421,10 +421,21 @@ let text = rule("the parts of the crate")
     .must_be_acyclic_between(any_of(["crate::*"]))
     .diagram(&app, DiagramFormat::Mermaid)
     .unwrap();
-std::fs::write("docs/architecture.md", format!("```mermaid\n{text}```\n")).unwrap();
 ```
 
 docs/rust.md, example 17:
+
+```no_run
+# #![allow(unused, dead_code)]
+# use refpact::*;
+# let app = Crate::load(env!("CARGO_MANIFEST_DIR")).unwrap();
+rule("the parts of the crate")
+    .modules(all())
+    .must_be_acyclic_between(any_of(["crate::*"]))
+    .check_diagram(&app, concat!(env!("CARGO_MANIFEST_DIR"), "/docs/architecture.md"));
+```
+
+docs/rust.md, example 18:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -438,7 +449,7 @@ let text = layers("the layers of the shop")
     .unwrap();
 ```
 
-docs/rust.md, example 18:
+docs/rust.md, example 19:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -470,7 +481,7 @@ rule("a module uses at most ten other modules")
     .check(&app);
 ```
 
-docs/rust.md, example 19:
+docs/rust.md, example 20:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -503,7 +514,7 @@ rule("collections are imported")
     .check(&app);
 ```
 
-docs/rust.md, example 20:
+docs/rust.md, example 21:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -526,7 +537,7 @@ rule("a public function has at most five uses")
     .check(&app);
 ```
 
-docs/rust.md, example 21:
+docs/rust.md, example 22:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -547,7 +558,7 @@ rule("no module is more than three uses away from the errors")
     .check(&app);
 ```
 
-docs/rust.md, example 22:
+docs/rust.md, example 23:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -579,7 +590,7 @@ rule("a module that many modules use is stable")
     .check(&app);
 ```
 
-docs/rust.md, example 23:
+docs/rust.md, example 24:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -606,7 +617,7 @@ impl RuleSet for NoDatabase {
 NoDatabase(&["api", "domain"]).check(&app);
 ```
 
-docs/rust.md, example 24:
+docs/rust.md, example 25:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -618,7 +629,7 @@ rule("no feature uses another feature")
     .check(&app);
 ```
 
-docs/rust.md, example 25:
+docs/rust.md, example 26:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -635,7 +646,7 @@ rule("every module is reachable from the crate root")
     .check(&app);
 ```
 
-docs/rust.md, example 26:
+docs/rust.md, example 27:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -647,7 +658,7 @@ rule("the api does not reach the file system")
     .check(&app);
 ```
 
-docs/rust.md, example 27:
+docs/rust.md, example 28:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -666,7 +677,7 @@ rule("no function is longer than 60 lines")
     .check(&app);
 ```
 
-docs/rust.md, example 28:
+docs/rust.md, example 29:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -689,7 +700,7 @@ rule("the api does not change the total of an order")
     .check(&app);
 ```
 
-docs/rust.md, example 29:
+docs/rust.md, example 30:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -708,7 +719,7 @@ rule("the crates form no cycle")
     .check(&shop);
 ```
 
-docs/rust.md, example 30:
+docs/rust.md, example 31:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -726,7 +737,7 @@ rule("the domain is built without a database")
     .check(&shop);
 ```
 
-docs/rust.md, example 31:
+docs/rust.md, example 32:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -761,7 +772,7 @@ rule("every package has a licence that we accept")
     .check(&shop);
 ```
 
-docs/rust.md, example 32:
+docs/rust.md, example 33:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -802,7 +813,7 @@ rule("a build has one version of each package")
     .check(&shop);
 ```
 
-docs/rust.md, example 33:
+docs/rust.md, example 34:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -816,7 +827,7 @@ rule("the domain does not use storage")
     .check_with_baseline(&app, &baseline);
 ```
 
-docs/rust.md, example 34:
+docs/rust.md, example 35:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -829,7 +840,7 @@ rule("files are opened in the platform layer only")
     .check(&app);
 ```
 
-docs/rust.md, example 35:
+docs/rust.md, example 36:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -846,7 +857,7 @@ rule("the model reads no file")
     .check(&app);
 ```
 
-docs/rust.md, example 36:
+docs/rust.md, example 37:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -859,7 +870,7 @@ rule("only the Windows code opens files")
     .check(&app);
 ```
 
-docs/rust.md, example 37:
+docs/rust.md, example 38:
 
 ```no_run
 # #![allow(unused, dead_code)]

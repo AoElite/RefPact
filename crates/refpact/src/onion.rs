@@ -130,6 +130,22 @@ impl Onion {
     pub fn diagram(&self, krate: &Crate, format: DiagramFormat) -> Result<String, Failure> {
         self.as_layers().diagram(krate, format)
     }
+
+    /// Like [`Onion::check_diagram`], but the failure is a value.
+    pub fn verify_diagram(
+        &self,
+        krate: &Crate,
+        file: impl AsRef<std::path::Path>,
+    ) -> Result<(), Failure> {
+        self.as_layers().verify_diagram(krate, file)
+    }
+
+    /// Fails the test when the file does not hold the [diagram](Onion::diagram) of the
+    /// parts. See [`Rule::check_diagram`].
+    #[track_caller]
+    pub fn check_diagram(&self, krate: &Crate, file: impl AsRef<std::path::Path>) {
+        self.as_layers().check_diagram(krate, file);
+    }
 }
 
 impl RuleSet for Onion {

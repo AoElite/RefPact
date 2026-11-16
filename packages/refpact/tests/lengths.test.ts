@@ -60,6 +60,10 @@ it("the lines of a file are counted, and a line break at the end starts no line"
   // an empty file has no import and no item: a violation about it has its file
   const placed = rule("the empty file is the api").files(anyOf("src/empty.ts")).mustBeIn(["src/api.ts"]).evaluate(shop);
   expect(placed.ok && placed.violations.map((violation) => violation.file)).toEqual(["src/empty.ts"]);
+  // so has a violation of a check of the user
+  const whole = rule("whole").files(anyOf("src/empty.ts")).mustSatisfy((scope) => scope.subjects.map((file) => scope.violationOfFile(file, "is here")));
+  const found = whole.evaluate(shop);
+  expect(found.ok && found.violations.map((violation) => violation.file)).toEqual(["src/empty.ts"]);
 });
 
 it("a file at the limit passes, and a longer file is reported", () => {

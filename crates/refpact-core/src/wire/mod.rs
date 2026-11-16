@@ -36,7 +36,7 @@ use crate::baseline::{
     apply_baseline, baseline_entries, baseline_key, format_baseline, parse_baseline, render_stale,
     BaselineEntry, StaleEntry,
 };
-use crate::diagram::{DiagramFormat, DiagramLayer, DiagramNodes};
+use crate::diagram::{render_stale_diagram, DiagramFormat, DiagramLayer, DiagramNodes};
 use crate::error::{ErrorCode, Role, RuleError};
 use crate::eval::Prepared;
 use crate::model::{Candidates, Certainty, KindFilter, RawPattern, Targets};
@@ -175,6 +175,18 @@ impl Session {
                     .to_text(),
                     Err(errors) => errors_answer(&errors),
                 }
+            }
+            "diagram-format" => {
+                let file = get(&request, "file", string)?;
+                match DiagramFormat::of_file(&file) {
+                    Some(format) => object([("format", borrowed(format.as_str()))]).to_text(),
+                    None => object([]).to_text(),
+                }
+            }
+            "render-stale-diagram" => {
+                let rule = get(&request, "rule", string)?;
+                let file = get(&request, "file", string)?;
+                text(render_stale_diagram(&rule, &file)).to_text()
             }
             "print-path" => {
                 let path = get(&request, "path", strings)?;
@@ -410,6 +422,7 @@ fn diagram_format(value: &Value) -> Read<DiagramFormat> {
     match string(value)?.as_str() {
         "mermaid" => Ok(DiagramFormat::Mermaid),
         "dot" => Ok(DiagramFormat::Dot),
+        "markdown" => Ok(DiagramFormat::Markdown),
         other => Err(unknown("format", other)),
     }
 }
@@ -970,6 +983,23 @@ mod tests {
             ),
         );
         assert_eq!(printed.to_text(), r#"{"text":"lib/fp@map"}"#);
+        let format_of = |session: &mut Session, file: &str| {
+            let request = format!(r#"{{"op": "diagram-format", "file": "{file}"}}"#);
+            call(session, &request).to_text()
+        };
+        assert_eq!(
+            format_of(&mut session, "docs/a.md"),
+            r#"{"format":"markdown"}"#
+        );
+        assert_eq!(format_of(&mut session, "docs/a.txt"), "{}");
+        let stale = call(
+            &mut session,
+            r#"{"op": "render-stale-diagram", "rule": "r", "file": "a.md"}"#,
+        );
+        assert_eq!(
+            stale.get("text").unwrap().to_text(),
+            r#""rule `r`: the diagram a.md is not the diagram of the code.\nRun the tests with REFPACT_DIAGRAM=update to write the diagram again.""#
+        );
         let text = call(
             &mut session,
             &format!(r#"{{"op": "format-baseline", "entries": {entries}}}"#),

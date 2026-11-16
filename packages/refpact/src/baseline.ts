@@ -50,16 +50,21 @@ export class Baseline {
     }
     const kept = (entries as readonly BaselineEntry[]).filter((entry) => entry.rule !== rule);
     try {
-      mkdirSync(path.dirname(this.file), { recursive: true });
-      // Written beside the file and moved, so that a reader never sees half a file.
-      const partial = `${this.file}.partial`;
-      writeFileSync(partial, formatBaseline([...kept, ...baselineEntries(violations, format)]));
-      renameSync(partial, this.file);
+      writeFile(this.file, formatBaseline([...kept, ...baselineEntries(violations, format)]));
     } catch (error) {
       return { type: "baseline", message: `refpact: cannot write ${this.file}: ${(error as Error).message}` };
     }
     return undefined;
   }
+}
+
+/** Writes a file, and the directory of the file when it is not there. @internal */
+export function writeFile(file: string, text: string): void {
+  mkdirSync(path.dirname(file), { recursive: true });
+  // Written beside the file and moved, so that a reader never sees half a file.
+  const partial = `${file}.partial`;
+  writeFileSync(partial, text);
+  renameSync(partial, file);
 }
 
 /**

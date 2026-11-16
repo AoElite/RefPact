@@ -43,7 +43,7 @@ pub use baseline::{
     Applied, BaselineEntry, BaselineError, StaleEntry,
 };
 pub use check::{Check, Checker, Custom, NoReferences, Scope, Seen, SeenMarker, Setup};
-pub use diagram::{DiagramFormat, DiagramLayer, DiagramNodes};
+pub use diagram::{render_stale_diagram, DiagramFormat, DiagramLayer, DiagramNodes};
 pub use error::{ErrorCode, Role, RuleError};
 pub use eval::{evaluate, Prepared};
 pub use graph::{Chain, Edge, Graph, Search, Slices, Tangle};

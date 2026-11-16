@@ -1,5 +1,5 @@
 // Diagrams of what a rule sees, in Mermaid and DOT.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, it } from "vitest";
 import { scratchDirectory } from "./scratch.ts";
@@ -138,4 +138,65 @@ it("a layer that matches no file throws an invalid failure", () => {
 
 it("malformed layers have no diagram", () => {
   expect(() => layers("the layers").layer("ui", "src/features/**").diagram(app)).toThrow(/fewer than two layers/);
+});
+
+it("a diagram file is checked against the diagram, and written on request", () => {
+  const docs = scratchDirectory("refpact-diagram-files-");
+  const file = (name: string): string => path.join(docs, "nested", name);
+  const read = (name: string): string => readFileSync(file(name), "utf8");
+  const features = rule("the features").files(all()).mustBeAcyclicBetween(anyOf("src/features/*"));
+  const stack = layers("the layers").layer("features", "src/features/**").layer("shared", "src/shared/**");
+  const onion = onionArchitecture("the onion").domainModels("src/shared/**").adapter("cart", "src/features/cart/**").adapter("prices", "src/features/prices/**");
+  // The variable belongs to the process: each part of the test sets it and takes it away.
+  const withVariable = (value: string, run: () => void): void => {
+    process.env["REFPACT_DIAGRAM"] = value;
+    try {
+      run();
+    } finally {
+      delete process.env["REFPACT_DIAGRAM"];
+    }
+  };
+  // A file that is not there is not current, and any other value does not write.
+  withVariable("yes", () => {
+    expect(features.verifyDiagram(app, file("features.md"))).toMatchObject({ type: "stale-diagram", rule: "the features", file: file("features.md") });
+    expect(existsSync(file("features.md"))).toBe(false);
+  });
+  withVariable("update", () => {
+    for (const name of ["features.md", "features.mmd", "features.dot"]) {
+      features.checkDiagram(app, file(name));
+    }
+    stack.checkDiagram(app, file("stack.mermaid"));
+    onion.checkDiagram(app, file("onion.gv"));
+    // The name of the file must give a format, also for an update.
+    expect(features.verifyDiagram(app, file("features.txt"))).toMatchObject({ type: "diagram" });
+    expect(existsSync(file("features.txt"))).toBe(false);
+  });
+  expect(read("features.mmd")).toBe(features.diagram(app));
+  expect(read("features.md")).toBe(`\`\`\`mermaid\n${features.diagram(app)}\`\`\`\n`);
+  expect(features.diagram(app, "markdown")).toBe(read("features.md"));
+  expect(read("features.dot")).toBe(features.diagram(app, "dot"));
+  expect(read("stack.mermaid")).toBe(stack.diagram(app));
+  expect(read("onion.gv")).toBe(onion.diagram(app, "dot"));
+
+  // The written files are current, also with the line ends of Windows.
+  features.checkDiagram(app, file("features.md"));
+  stack.checkDiagram(app, file("stack.mermaid"));
+  onion.checkDiagram(app, file("onion.gv"));
+  writeFileSync(file("features.md"), read("features.md").replaceAll("\n", "\r\n"));
+  features.checkDiagram(app, file("features.md"));
+  // An update does not write a file that is current.
+  withVariable("update", () => features.checkDiagram(app, file("features.md")));
+  expect(read("features.md")).toContain("\r\n");
+
+  // A file with another diagram is not current, and the check does not write it.
+  expect(stack.verifyDiagram(app, file("features.md"))).toMatchObject({ type: "stale-diagram" });
+  expect(onion.verifyDiagram(app, file("features.dot"))).toMatchObject({ type: "stale-diagram" });
+  writeFileSync(file("features.md"), "an old diagram\n");
+  expect(() => features.checkDiagram(app, file("features.md"))).toThrow(
+    `rule \`the features\`: the diagram ${file("features.md")} is not the diagram of the code.\nRun the tests with REFPACT_DIAGRAM=update to write the diagram again.`,
+  );
+  expect(read("features.md")).toBe("an old diagram\n");
+  // A rule that cannot be evaluated has no diagram.
+  expect(rule("nowhere").files(anyOf("src/nowhere/**")).mustBeAcyclic().verifyDiagram(app, file("features.md"))).toMatchObject({ type: "invalid" });
+  expect(layers("the layers").layer("ui", "src/features/**").verifyDiagram(app, file("stack.mermaid"))).toMatchObject({ type: "malformed" });
 });

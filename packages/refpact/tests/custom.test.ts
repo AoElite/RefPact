@@ -126,8 +126,8 @@ it("a check of the user follows the imports in the graph of the files", () => {
   const depth = rule("no file is more than one import away from c")
     .files(all())
     .mustSatisfy((scope) => {
-      const graph = scope.graph();
-      expect(scope.graph()).toBe(graph);
+      const graph = scope.fileGraph();
+      expect(scope.fileGraph()).toBe(graph);
       edges = scope.subjects.flatMap((from) => graph.edgesOf(from).map((edge) => `${from.join("/")} -> ${edge.to.join("/")} at ${edge.fact.line} by ${edge.target.join("/")}`));
       const isC = (found: readonly string[]): boolean => found.join("/") === "src/c.ts";
       for (const from of scope.subjects) {
@@ -151,7 +151,7 @@ it("a check of the user follows the imports in the graph of the files", () => {
   rule("probe")
     .files(all())
     .mustSatisfy((scope) => {
-      withoutTypes = scope.graph().chain(file("a.ts"), (found) => found.join("/") === "src/c.ts")?.map((step) => `${step.line}`).join(",");
+      withoutTypes = scope.fileGraph().chain(file("a.ts"), (found) => found.join("/") === "src/c.ts")?.map((step) => `${step.line}`).join(",");
       return [];
     })
     .ignoringTypeImports()
@@ -175,8 +175,8 @@ it("a check of the user follows the imports in the graph of the files", () => {
   rule("probe")
     .files(all())
     .mustSatisfy((scope) => {
-      throughBarrel = scope.graph().edgesOf(["src", "user.ts"]).map((edge) => edge.to.join("/"));
-      tangles = scope.graph().tangles().map((tangle) => [tangle.members.map((file) => file.join("/")).join(" "), tangle.cycle.map((step) => `${step.from.join("/")}:${step.line} ${step.kind}`).join(", ")]);
+      throughBarrel = scope.fileGraph().edgesOf(["src", "user.ts"]).map((edge) => edge.to.join("/"));
+      tangles = scope.fileGraph().tangles().map((tangle) => [tangle.members.map((file) => file.join("/")).join(" "), tangle.cycle.map((step) => `${step.from.join("/")}:${step.line} ${step.kind}`).join(", ")]);
       return [];
     })
     .check(loadProject(path.join(barrels, "tsconfig.json")));
@@ -312,7 +312,7 @@ it("a check counts the importers of a file and its instability", () => {
     rule("a file that many files import is stable")
       .files(anyOf("src/**"))
       .mustSatisfy((scope) => {
-        const graph = scope.graph();
+        const graph = scope.fileGraph();
         const importers = new Map<string, number>();
         for (const file of scope.facts.units) {
           for (const edge of graph.edgesOf(file)) {
@@ -355,7 +355,7 @@ it("the graph of a check gives the cycles and the chains of the built-in rules",
     for (const project of [planted, self]) {
       const cycles: unknown[] = [];
       const own = rule("r").files(all()).mustSatisfy((scope) => {
-        cycles.push(...scope.graph().tangles().map((tangle) => ({ unit: tangle.members[0], steps: tangle.cycle, size: tangle.members.length })));
+        cycles.push(...scope.fileGraph().tangles().map((tangle) => ({ unit: tangle.members[0], steps: tangle.cycle, size: tangle.members.length })));
         return [];
       });
       filter(own).check(project);
@@ -374,7 +374,7 @@ it("the graph of a check gives the cycles and the chains of the built-in rules",
         expect(scope.subjectGraph()).toBe(graph);
         cycles.push(...graph.tangles().map((tangle) => ({ unit: tangle.members[0], steps: tangle.cycle, size: tangle.members.length })));
         expect(graph.edgesOf(["src", "rings", "gamma.ts"]).length > 0).toBe(scope.selects(["src", "rings", "gamma.ts"]));
-        all = scope.graph().tangles().length;
+        all = scope.fileGraph().tangles().length;
         return [];
       });
       filter(own).check(planted);
@@ -386,7 +386,7 @@ it("the graph of a check gives the cycles and the chains of the built-in rules",
       (scope) => {
         const ends = new Set(scope.imports.filter((seen) => seen.hits["fs"] !== undefined).map((seen) => seen.file.join("/")));
         for (const file of scope.subjects) {
-          const steps = scope.graph().chain(file, (end) => ends.has(end.join("/")));
+          const steps = scope.fileGraph().chain(file, (end) => ends.has(end.join("/")));
           if (steps !== undefined) {
             chains.push({ unit: file, steps });
           }

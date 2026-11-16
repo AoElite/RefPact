@@ -244,7 +244,7 @@ impl<'a> Setup<'a> {
         Slices::new(valid)
     }
 
-    /// The paths of the nodes of [`Scope::graph`]: the subjects, or their slices. A rule
+    /// The paths of the nodes of [`Scope::subject_graph`]: the subjects, or their slices. A rule
     /// about a graph with fewer than two nodes cannot fail (SPEC section 5, check 6).
     pub fn nodes(&self, slices: Option<&Slices>) -> Vec<Path> {
         graph::nodes(self.facts, self.selected, slices)
@@ -621,7 +621,7 @@ impl<'a> Scope<'a> {
     /// The graph of the subjects (SPEC 4.5): one node for each subject, or, with slices,
     /// one node for each slice of a subject. A subject in no slice is in no node, and a
     /// reference inside one node is no edge. The nodes are those of [`Setup::nodes`].
-    pub fn graph(&self, slices: Option<&Slices>) -> Graph<'a> {
+    pub fn subject_graph(&self, slices: Option<&Slices>) -> Graph<'a> {
         let facts = self.facts();
         let nodes = graph::nodes(facts, self.selected, slices);
         let numbers: FastMap<&[String], usize> = nodes

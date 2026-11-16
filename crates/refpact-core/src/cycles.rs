@@ -25,7 +25,7 @@ pub(crate) fn at_least_two_nodes(slices: Option<&Slices>, setup: &mut Setup) {
 
 /// One violation for each tangle, at its first node, with a shortest cycle through it.
 fn tangles(scope: &Scope, slices: Option<&Slices>) -> Vec<Violation> {
-    let graph = scope.graph(slices);
+    let graph = scope.subject_graph(slices);
     graph
         .tangles()
         .into_iter()

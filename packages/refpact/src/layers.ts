@@ -3,9 +3,10 @@ import { addFilters } from "./filters.ts";
 import type { Filter, Filters } from "./filters.ts";
 import { RuleSet } from "./group.ts";
 import type { DiagramFormat } from "./core/index.ts";
+import { verifyDiagram } from "./diagram.ts";
 import type { Project } from "./frontend/project.ts";
 import { filePattern } from "./patterns.ts";
-import { all, AnyOf, anyOf, ArchitectureError, Files, rule } from "./rules.ts";
+import { all, AnyOf, anyOf, ArchitectureError, Files, orFailure, rule } from "./rules.ts";
 import type { Failure, ImportRule } from "./rules.ts";
 
 interface Settings {
@@ -150,7 +151,7 @@ export class Layers extends RuleSet {
   }
 
   /**
-   * A diagram of the layers, in Mermaid (the default) or DOT, from the top to the bottom. Each
+   * A diagram of the layers, in Mermaid (the default), DOT or Markdown, from the top to the bottom. Each
    * layer is a node, and an edge is an import between two layers. An import that the layers
    * forbid is red. A file is in the first layer that matches it, and a file in no layer is
    * not drawn. The files of {@link Layers.everyFileInALayer} are not checked.
@@ -160,7 +161,6 @@ export class Layers extends RuleSet {
    *
    * ```ts
    * const text = layers("the layers").layer("ui", "src/ui/**").layer("db", "src/db/**").diagram(app);
-   * writeFileSync("docs/layers.md", `\`\`\`mermaid\n${text}\`\`\`\n`);
    * ```
    */
   diagram(project: Project, format: DiagramFormat = "mermaid"): string {
@@ -176,6 +176,22 @@ export class Layers extends RuleSet {
     }));
     const drawn = rule(settings.name).files(all()).mustBeImported();
     return this.withFilters(drawn, true).draw(project, { layers: list }, format);
+  }
+
+  /** Like {@link Layers.checkDiagram}, but returns the failure, or `undefined` when the file is current. */
+  verifyDiagram(project: Project, file: string): Failure | undefined {
+    return verifyDiagram(this.settings.name, file, (format) => orFailure(() => this.diagram(project, format)));
+  }
+
+  /**
+   * Throws an {@link ArchitectureError} when the file does not hold the
+   * {@link Layers.diagram | diagram} of the layers. See {@link ImportRule.checkDiagram}.
+   */
+  checkDiagram(project: Project, file: string): void {
+    const failure = this.verifyDiagram(project, file);
+    if (failure !== undefined) {
+      throw new ArchitectureError(failure);
+    }
   }
 
   /** For each layer, by position from the top, the layers it may import; or every problem of the layers. */

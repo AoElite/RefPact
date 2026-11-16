@@ -137,6 +137,7 @@ The report shows that refpact follows a name through a barrel file to the file t
 | Say why a rule exists, in its report | `because` | `because` |
 | Report a rule without failing the check | `as_warning` | `asWarning` |
 | Draw what a rule or a set of layers sees as a Mermaid or Graphviz diagram, with its cycles or forbidden uses in red | `diagram` | `diagram` |
+| Keep a diagram that is committed with the code current: the test fails when the file is not the diagram | `check_diagram` | `checkDiagram` |
 | A rule of your own about modules or items, with the subjects, filters, exemptions, reports and baselines of every rule | `must_satisfy`, `must_meet` | `mustSatisfy` |
 | A set of rules of your own, checked as layers are | `RuleSet` | `RuleSet` |
 | Imported packages are in `package.json` | | `mustOnlyImportDeclaredPackages` |

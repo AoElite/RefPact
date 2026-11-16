@@ -157,7 +157,7 @@ export class Scope {
    * leads to the file of each of its paths, so an import through a barrel file leads to the
    * barrel and to the file that declares the name. An import of the own file is no edge.
    */
-  graph(): Graph {
+  fileGraph(): Graph {
     this.made.all ??= new Graph(this.facts, this.core.graph(false), () => this.core.tangles(false));
     return this.made.all;
   }
@@ -197,11 +197,14 @@ export class Scope {
   /** A violation about a file as a whole, with no line. */
   violationOfFile(file: Path, detail: string | Detail, baselineKey?: string): Violation {
     if (this.firstFiles === undefined) {
+      // As the core has it: the file that the fact set gives, then that of the first fact
+      // of the file, then that of its first declaration.
+      const { facts, units, unitFiles = [], declarations = [] } = this.facts;
+      const given = units.map((unit, number) => ({ unit, file: unitFiles[number] ?? "" })).filter(({ file }) => file !== "");
       this.firstFiles = new Map();
-      for (const fact of this.facts.facts) {
-        const unit = key(fact.unit);
-        if (!this.firstFiles.has(unit)) {
-          this.firstFiles.set(unit, fact.file);
+      for (const { unit, file } of [...given, ...facts, ...declarations]) {
+        if (!this.firstFiles.has(key(unit))) {
+          this.firstFiles.set(key(unit), file);
         }
       }
     }
@@ -231,7 +234,7 @@ export class ItemScope extends Scope {
   }
 }
 
-/** A graph of files: see {@link Scope.graph} and {@link Scope.subjectGraph}. */
+/** A graph of files: see {@link Scope.fileGraph} and {@link Scope.subjectGraph}. */
 export class Graph {
   /** The file of each node. */
   private readonly units: readonly Path[];

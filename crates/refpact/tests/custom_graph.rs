@@ -54,7 +54,7 @@ impl Check for Acyclic {
             setup.error(ErrorCode::TooFewNodes, None, None);
         }
         Box::new(move |scope: &Scope<'_>| -> Vec<Violation> {
-            let graph = scope.graph(slices.as_ref());
+            let graph = scope.subject_graph(slices.as_ref());
             graph
                 .tangles()
                 .into_iter()
@@ -104,7 +104,7 @@ fn the_graph_of_the_subjects_gives_the_cycles_of_the_built_in_rule() {
     rule("the members of each tangle")
         .modules(all())
         .must_meet(move |scope: &Scope<'_>| -> Vec<Violation> {
-            let graph = scope.graph(None);
+            let graph = scope.subject_graph(None);
             for tangle in graph.tangles() {
                 let paths = tangle
                     .members

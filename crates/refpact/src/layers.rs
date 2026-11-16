@@ -159,7 +159,7 @@ impl Layers {
         Ok(rules)
     }
 
-    /// A diagram of the layers, in Mermaid or DOT, from the top to the bottom. Each layer is
+    /// A diagram of the layers, in Mermaid, DOT or Markdown, from the top to the bottom. Each layer is
     /// a node, and an edge is a use between two layers. A use that the layers forbid is red.
     /// A module is in the first layer that matches it, and a module in no layer is not drawn.
     /// The modules of [`Layers::every_module_in_a_layer`] are not checked.
@@ -208,6 +208,25 @@ impl Layers {
         let made = rule(self.name.clone()).modules(all()).must_be_used();
         self.filtered(made, true)
             .draw(krate, DiagramNodes::Layers(&list), format)
+    }
+
+    /// Like [`Layers::check_diagram`], but the failure is a value.
+    pub fn verify_diagram(
+        &self,
+        krate: &Crate,
+        file: impl AsRef<std::path::Path>,
+    ) -> Result<(), Failure> {
+        let draw = |format| self.diagram(krate, format);
+        crate::diagram::verify(&self.name, file.as_ref(), draw)
+    }
+
+    /// Fails the test when the file does not hold the [diagram](Layers::diagram) of the
+    /// layers. See [`Rule::check_diagram`].
+    #[track_caller]
+    pub fn check_diagram(&self, krate: &Crate, file: impl AsRef<std::path::Path>) {
+        if let Err(failure) = self.verify_diagram(krate, file) {
+            panic!("{failure}");
+        }
     }
 
     /// For each layer, by position from the top, the layers it may use. The error lists
