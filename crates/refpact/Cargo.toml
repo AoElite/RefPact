@@ -14,7 +14,7 @@ include = ["src/**", "tests/readme_examples.md", "README.md", "LICENSE"]
 publish.workspace = true
 
 [dependencies]
-refpact-core = { path = "../refpact-core", version = "=0.5.1" }
+refpact-core = { path = "../refpact-core", version = "=0.6.0" }
 syn.workspace = true
 proc-macro2.workspace = true
 
