@@ -79,6 +79,8 @@ it("what a type is assignable to", () => {
     "Order [assignable-to src/domain/entity.ts#Entity, assignable-to src/domain/entity.ts#Saved, extends src/domain/entity.ts#Entity]",
     "Special [assignable-to src/domain/entity.ts#Entity, assignable-to src/domain/entity.ts#Saved, assignable-to src/domain/order.ts#Order, extends src/domain/order.ts#Order]",
     "Total []",
+    // The field of the interface `Total`.
+    "value []",
   ]);
   // A cycle ends, and a type is not assignable to itself.
   expect(relations("src/cycle.ts")).toEqual([

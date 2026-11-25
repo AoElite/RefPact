@@ -299,12 +299,9 @@ pub fn apply_baseline(
 mod tests {
     use super::*;
 
-    /// A cycle of a check of the user may give no size and no steps. Its entry still has a
-    /// unit and a count that a baseline can hold, and the baseline that is written accepts
-    /// the violation.
-    #[test]
-    fn a_cycle_without_a_size_is_written_with_a_count_that_can_be_read() {
-        let violation = Violation {
+    /// A cycle of the unit `a` with no steps, as a check of the user may give it.
+    fn cycle(size: usize) -> Violation {
+        Violation {
             rule: "r".to_owned(),
             unit: vec!["a".to_owned()],
             file: "a".to_owned(),
@@ -313,9 +310,17 @@ mod tests {
             note: None,
             detail: Detail::Cycle {
                 steps: Vec::new(),
-                size: 0,
+                size,
             },
-        };
+        }
+    }
+
+    /// A cycle of a check of the user may give no size and no steps. Its entry still has a
+    /// unit and a count that a baseline can hold, and the baseline that is written accepts
+    /// the violation.
+    #[test]
+    fn a_cycle_without_a_size_is_written_with_a_count_that_can_be_read() {
+        let violation = cycle(0);
         let format = PathFormat::plain("::");
         let entries = baseline_entries(std::slice::from_ref(&violation), &format);
         assert_eq!((entries[0].unit.as_str(), entries[0].count), ("a", 1));
@@ -335,18 +340,6 @@ mod tests {
     /// and it is not a small number that an entry accepts.
     #[test]
     fn the_weights_of_large_cycles_do_not_wrap() {
-        let cycle = |size: usize| Violation {
-            rule: "r".to_owned(),
-            unit: vec!["a".to_owned()],
-            file: "a".to_owned(),
-            line: 1,
-            column: 1,
-            note: None,
-            detail: Detail::Cycle {
-                steps: Vec::new(),
-                size,
-            },
-        };
         let format = PathFormat::plain("::");
         let large = vec![cycle(u32::MAX as usize), cycle(3)];
         let entries = baseline_entries(&large, &format);

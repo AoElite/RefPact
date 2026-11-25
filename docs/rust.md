@@ -1206,6 +1206,8 @@ rule("the crates form no cycle")
 - The name of a crate and its root file are those of the library target that Cargo names:
   the `name` and the `path` of `[lib]`, or the package name with `_` for `-` and
   `src/lib.rs`. A package without a library is read from its program.
+- The programs of a package are read with its library, as one crate: see
+  [a package with programs](#a-package-with-programs).
 - A dependency that a manifest renames (`store = { package = "shop-storage" }`) is known
   under both names: `store::Db` is also a use of `shop_storage::Db`.
 - A path into another member is followed through the re-exports of that member. A use of
@@ -1216,9 +1218,40 @@ rule("the crates form no cycle")
 Limits:
 
 - The directory must be the directory of the workspace, and each member must be below it.
-- Only the library target of a package is read, or its program when there is no library.
+- The library and the programs of a package are read. Its tests, examples and benches and
+  its `build.rs` are not.
 - The code under every `cfg` is checked, as in a single crate. See
   [Code under `cfg`](#code-under-cfg).
+
+### A package with programs
+
+A package can have a library and programs: `src/lib.rs` with `src/main.rs`, the files of
+`src/bin`, or the `[[bin]]` targets of the manifest. For the compiler each is a crate of its
+own. A load reads them together as one crate, so one rule covers the package:
+
+```rust
+let app = Crate::load(env!("CARGO_MANIFEST_DIR")).unwrap();
+
+rule("the command line does not use the database")
+    .modules(any_of(["crate::cli::**"]))        // `mod cli;` in src/main.rs
+    .must_not_use(any_of(["crate::db"]))        // `pub mod db;` in src/lib.rs
+    .check(&app);
+```
+
+- A module of a program is named as a module of the library is: `crate::cli`, or
+  `shop_storage::cli` in a workspace. The root of each program is the root module, `crate`.
+- A program names its library as another crate does: `shop_storage::db::Db`. That is a use
+  of `crate::db::Db`.
+- `Crate::load` and `Workspace::load` do this for the programs that Cargo names for the
+  package. A load that names its root, `Crate::options(dir).root("src/main.rs")`, reads
+  that crate only, and so does a load of a directory without a `Cargo.toml`.
+
+Limits:
+
+- A module that the library and a program both have, at the same path, is one module for a
+  rule. A file that both declare (`mod config;` in `lib.rs` and in `main.rs`) is read once,
+  as code of the library.
+- The number of lines of the root module is that of the root file of the library.
 
 ### Dependencies of the manifest
 
@@ -1432,6 +1465,8 @@ filters. For layers and an onion, a filter applies to each of their rules.
   [glob imports of other crates](#limits-of-the-rust-analysis).
 - `only_kinds([Kind::Use])` and `ignoring_kinds([Kind::MacroTokens])` select by the form of
   the reference. The kinds are in the next section.
+- Two filters of kinds both hold, in each order: `ignoring_kinds` twice leaves out the kinds
+  of both, and `only_kinds` after `ignoring_kinds` counts its kinds without those.
 - `ignoring_use(FROM, TO)` lets the references from some modules to some paths pass. See
   [exemptions](#exemptions).
 - `because(REASON)` and `as_warning()` say [why a rule exists](#why-a-rule-exists) and make
@@ -1688,6 +1723,10 @@ that depend on types. It does not run the compiler, and it does not read crates 
     give the name and the index does not say which.
   - The path of a definition can be in a private module: `std::collections::HashMap` is
     defined at `std::collections::hash::map::HashMap`. A macro has no second path.
+- **A tool that does not end is stopped.** A load waits at most 60 seconds for
+  `rustc --print cfg`, 10 minutes for `cargo metadata`, and 60 minutes for rust-analyzer.
+  After that the tool is stopped and the load is an error that names it, so a test does
+  not wait without end for a tool that waits for a lock or for the network.
 - **Cargo says what the manifests mean.** A load of a directory with a `Cargo.toml` runs
   `cargo metadata` for the packages, the names of their crates, their root files and the
   dependencies that a manifest renames. refpact reads `Cargo.toml` itself only for the line
@@ -1702,9 +1741,10 @@ that depend on types. It does not run the compiler, and it does not read crates 
 - **Value and type namespaces are not kept apart.** If one module has a function and a
   module with the same name, both are one path.
 - **Paths in strings are not seen:** `#[serde(with = "path::to::module")]`.
-- **One crate root at a time.** `Crate::load` reads the library of the package, or its
-  program when there is no library. Integration tests, examples, benches and `build.rs` are other crates. Analyse
-  one with `Crate::options(dir).root("src/main.rs").load()`.
+- **The library and the programs of a package.** `Crate::load` reads the library of the
+  package and [its programs](#a-package-with-programs). Integration tests, examples, benches
+  and `build.rs` are other crates, which a load does not read. A load that names its root
+  reads that crate alone: `Crate::options(dir).root("src/main.rs").load()`.
 - **`pub(in path)`** is not a use of that path.
 - **The std prelude is a fixed table** (`Vec`, `Option`, `Some`, `Box`, `String`, `Clone`,
   `Default`, `Iterator`, and the like). A crate with `#![no_implicit_prelude]` or its own

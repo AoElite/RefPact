@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "test:node": "node --test architecture.node.test.ts",
+    "test:node": "node --test --test-timeout=60000 architecture.node.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {

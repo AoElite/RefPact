@@ -71,6 +71,8 @@ pub(crate) struct Package {
     pub manifest: PathBuf,
     /// The root file of its library, or of its program when it has no library.
     pub root: Option<PathBuf>,
+    /// The root files of its other programs.
+    pub programs: Vec<PathBuf>,
     /// The dependencies that the manifest gives another name: the name that the code
     /// writes, and the name of the package.
     renamed: Vec<(String, String)>,
@@ -130,6 +132,11 @@ impl Graph {
             let root = library
                 .or(program)
                 .and_then(|target| text_of(target, "src_path"));
+            let others = programs()
+                .filter_map(|target| text_of(target, "src_path"))
+                .filter(|path| Some(path) != root.as_ref())
+                .map(PathBuf::from)
+                .collect();
             let manifest = text_of(&package, "manifest_path").ok_or_else(unreadable)?;
             let renamed = list(&package, "dependencies")
                 .into_iter()
@@ -152,6 +159,7 @@ impl Graph {
                 member: members.contains(&id),
                 manifest: PathBuf::from(manifest),
                 root: root.map(PathBuf::from),
+                programs: others,
                 dependencies: Vec::new(),
             });
             places.insert(id, packages.len() - 1);

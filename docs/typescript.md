@@ -118,6 +118,11 @@ project. The rules are fast after that.
   file in its own process or worker, so each file that calls `loadProject` loads the
   project again.
 
+- **A second load in one process is faster with TypeScript 6.** Its compiler runs in the
+  process of the test, and the files of the installed packages, which are most files of a
+  program, are parsed once for the loads that have the same compiler options. A file of a
+  package that changes is read again.
+
 On a generated project of 10,000 files, `loadProject` takes about 15 seconds and about
 0.6 GB of memory with TypeScript 7, and one rule takes about 0.1 seconds. TypeScript 6 was
 not measured.
@@ -195,6 +200,8 @@ rule(name)
   | .mustBeNamed(..)
   | .mustExtend(TARGETS) | .mustImplement(TARGETS) | .mustBeDecoratedWith(TARGETS)
   | .mustNotExceedLines(LINES)         no item has more lines than this
+  | .mustNotImport(TARGETS)            the code of the items imports none of these
+  | .mustOnlyImport(TARGETS)           the code of the items imports only these
 ```
 
 `rules` works as in Rust: see [several rules at once](rust.md#several-rules-at-once). One
@@ -344,17 +351,71 @@ rule("no emitters in the domain").items(anyOf("src/domain/**")).extending(anyOf(
   `type`, `enum`, `variable` (each name of a `const`, `let` or `var`) and `namespace`. A
   `default` function or class without a name is named `default`.
 - The visibility is `exported` when the file exports the item, also under another name
-  (`export { a as b }`), and `local` otherwise.
+  (`export { a as b }`), and `local` otherwise. A member is `public`, `protected` or
+  `private`.
 - `extending` and `implementing` read the `extends` and `implements` clauses of classes and
   interfaces, and `decoratedWith` the decorators of a class. A target is the declaration of
   the name, as in `mustNotImport`: `src/domain/port.ts#Repository`, or `pkg("node:events")`
   for a class of a package.
-- **The members of a class are not items.** [Fields and methods](rust.md#fields-and-methods)
-  are items in Rust only: the TypeScript front end reads the top-level declarations.
-- **No rule about what the code of an item imports.** In Rust,
-  [`items(..).must_not_use`](rust.md#what-the-code-of-an-item-uses) is about the references
-  inside the selected items. The TypeScript front end does not record the item that a
-  reference is in, so a rule about imports is about files.
+
+### Fields and methods in TypeScript
+
+The fields and the methods of classes and interfaces are items too, of the kinds `field`
+and `method`, as [fields and methods](rust.md#fields-and-methods) are in Rust. A selection
+holds them only when `ofKind` names them, so the rules above see the items of files only.
+
+```ts
+rule("the domain has no public fields").items(anyOf("src/domain/**")).ofKind("field").withVisibility("public").mustNotExist().check(app);
+rule("no method takes a request").items(anyOf("src/domain/**")).ofKind("method").taking(anyOf("src/http/request.ts#Request")).mustNotExist().check(app);
+```
+
+- A member is at the path of its class or interface and its name:
+  `src/domain/order.ts#Order#total`. A private name has its `#`: `#Order##seen`.
+- A property is a field, and so is a parameter of the constructor that declares one:
+  `constructor(private readonly db: Db)`. A method, an accessor and the constructor, with
+  the name `constructor`, are methods. The signatures of an overloaded method are one
+  method.
+- The visibility is `private`, `protected` or `public`. A name that starts with `#` is
+  `private`, and a member of an interface is `public`.
+- `ofType` sees the written type of a field, `taking` and `returning` the signature of a
+  method, and `decoratedWith` the decorators of a member.
+- The members of an enum, of a class expression (`const A = class {}`) and of an object
+  type are no items, and neither is a member whose name the code computes: `[key]`.
+
+### What the code of an item imports
+
+`mustNotImport` and `mustOnlyImport` after `items(..)` are about the imports that the code of
+the selected items uses, as [`items(..).must_not_use`](rust.md#what-the-code-of-an-item-uses)
+is in Rust. The project must be loaded with `resolveUses`:
+
+```ts
+const app = loadProject("tsconfig.json", { resolveUses: true });
+
+rule("the handlers do not use the database")
+  .items(anyOf("src/api/**"))
+  .named("*Handler")
+  .mustNotImport(anyOf("src/db/**"))
+  .check(app);
+```
+
+- With `resolveUses`, each use of an imported name is an import of the kind of its
+  `import` statement, at the place of the use: `query(sql)` after `import { query } from
+  "./db"` is an import of `src/db.ts#query`. Every reference then says which item of the
+  file it is in.
+- The code of an item is its signature and its body. The code of a class is also the code
+  of its members, and a rule can select one method with `ofKind("method")`.
+- A variable that has the name of an import is no use of the import. The compiler says
+  which of the two a name is.
+- A target in the file of the item can break `mustNotImport`. `mustOnlyImport` allows what
+  the file of the item declares.
+- **A rule about files then reports more.** With `resolveUses`, `files(..).mustNotImport(..)`
+  reports the `import` statement and each use of its name, as a rule about modules does in
+  Rust. A [baseline](#allow-lists-cycles-workspaces-and-baselines-in-typescript) counts
+  them, so write it again after you turn the option on.
+- **Without the option, the rule is an error.** No reference says which item it is in, so
+  the rule cannot fail: `no-subjects`.
+- The load reads every function body and asks the compiler about each place where an
+  imported name is written, which takes longer. This is why the option is not the default.
 
 ### Types of items in TypeScript
 
@@ -406,7 +467,7 @@ rule("no async in the domain").items(anyOf("src/domain/**")).withModifier("async
 
 - A statement with several names, as `/** .. */ export const a = 1, b = 2;`, gives each name
   its modifiers.
-- The members of a class are not items, so they have no modifiers here.
+- A member has `async`, `abstract`, `declare` and `documented` as an item of a file does.
 
 ## Component files: Svelte, Vue and Astro
 
@@ -586,8 +647,8 @@ rule("no function is longer than 60 lines").items(anyOf("src/**")).ofKind("funct
   break at the end of the file starts no line.
 - The lines of an item run from the line of its name to the line on which its declaration
   ends. The decorators and the comments above the name do not count.
-- The items are the top-level declarations of a file. The methods of a class and the
-  functions inside other functions are not measured on their own.
+- The items are the top-level declarations of a file. A method of a class is measured on
+  its own with `ofKind("method")`. The functions inside other functions are not.
 - A variable ends where its own declaration ends: `const handler = () => { ... }` has the
   lines of the function.
 
@@ -1016,9 +1077,14 @@ which is the declared name).
 | `member` | `object.name`, where the name is a member of a class, an interface or an enum of another file; with [`resolveMembers`](#members-in-typescript) only |
 | `global` | a use of a global of the host as a value: `fetch(..)`, `process.env`, `window.localStorage`; see [globals](#globals-in-typescript) |
 
+Two filters of kinds both hold, in each order: `ignoringKinds("member").ignoringTypeImports()`
+leaves out the members and the type imports, and `onlyKinds` twice counts the kinds that both
+name.
+
 Each imported name is one reference to `module#name`, at the place of the name. An import of
 the module as a whole (`import "m"`, a namespace import, `export *`, `import()`, `require`)
-is one reference to the module.
+is one reference to the module. With [`resolveUses`](#what-the-code-of-an-item-imports), each
+use of an imported name in the code is one more reference, of the kind of its import.
 
 After `import * as ns from "m"`, `const ns = require("m")` or `import ns = require("m")`, each
 `ns.name` is a reference to `m#name`. A rule against one export of a package finds the named

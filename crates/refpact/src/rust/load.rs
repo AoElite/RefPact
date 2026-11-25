@@ -79,7 +79,7 @@ pub enum LoadError {
     },
     /// A crate of a workspace cannot be analysed.
     Member {
-        /// The directory of the crate.
+        /// The directory of the crate, relative to the workspace. Empty for the root package.
         dir: String,
         /// Why the crate cannot be analysed.
         error: Box<LoadError>,
@@ -142,6 +142,10 @@ impl fmt::Display for LoadError {
                 f,
                 "the load needs the index of rust-analyzer to resolve method calls: {message}"
             ),
+            // The root package of a workspace has no directory below it.
+            LoadError::Member { dir, error } if dir.is_empty() => {
+                write!(f, "in the crate at the root of the workspace: {error}")
+            }
             LoadError::Member { dir, error } => write!(f, "in the crate at `{dir}`: {error}"),
         }
     }

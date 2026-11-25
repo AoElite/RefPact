@@ -11,9 +11,11 @@ const tsc = fileURLToPath(new URL(`../node_modules/${compiler}/bin/tsc`, import.
 function compile(fixture: string, ...args: string[]): string {
   const cwd = fileURLToPath(new URL(`../../../fixtures/ts/${fixture}`, import.meta.url));
   try {
-    return execFileSync(process.execPath, [tsc, ...args], { cwd, encoding: "utf8" });
+    return execFileSync(process.execPath, [tsc, ...args], { cwd, encoding: "utf8", timeout: 120_000 });
   } catch (error) {
-    return (error as { stdout?: string }).stdout ?? String(error);
+    // A compiler that was stopped at the limit has written nothing, which is not a pass.
+    const failed = error as { stdout?: string; signal?: string | null };
+    return typeof failed.signal === "string" ? `the compiler did not end in time (${failed.signal})` : (failed.stdout ?? String(error));
   }
 }
 

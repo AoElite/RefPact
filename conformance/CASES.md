@@ -3669,6 +3669,7 @@ Paths are printed with the separator `::`.
 | 6 | `crate::internal::helper` | `crate::internal` | `src/internal.rs:4:1` |  | `fn` | `private` |  |  |  |
 | 7 | `crate::api::Dto` | `crate::api` | `src/api.rs:6:1` |  | `struct` | `pub` | derives `serde::Serialize`, derives `std::fmt::Debug` |  |  |
 | 8 | `crate::internal::test_helper` | `crate::internal` | `src/internal.rs:9:1` |  | `fn` | `pub` |  |  | `test` |
+| 9 | `crate::api::Dto::id` | `crate::api` | `src/api.rs:7:1` |  | `field` | `pub` |  |  |  |
 
 ### the items that implement a trait must reside in some units
 
@@ -3818,6 +3819,35 @@ rule `r` is violated in 3 place(s):
   src/storage.rs:2:1: [r] crate::storage declares struct crate::storage::PgRepository
   src/api.rs:3:1: [r] crate::api declares struct crate::api::MemRepository
   src/storage.rs:5:1: [r] crate::storage declares struct crate::storage::Cache
+```
+
+### a member is not selected when no kind is named
+
+```json
+{"items":{"must":"not_exist","visibilities":["pub"]},"name":"r","subjects":{"any_of":["crate::api"]}}
+```
+
+Result:
+
+```text
+rule `r` is violated in 2 place(s):
+  src/api.rs:3:1: [r] crate::api declares struct crate::api::MemRepository
+  src/api.rs:6:1: [r] crate::api declares struct crate::api::Dto
+```
+
+### a member is selected when its kind is named
+
+```json
+{"items":{"kinds":["struct","field"],"must":"not_exist","visibilities":["pub"]},"name":"r","subjects":{"any_of":["crate::api"]}}
+```
+
+Result:
+
+```text
+rule `r` is violated in 3 place(s):
+  src/api.rs:3:1: [r] crate::api declares struct crate::api::MemRepository
+  src/api.rs:6:1: [r] crate::api declares struct crate::api::Dto
+  src/api.rs:7:1: [r] crate::api declares field crate::api::Dto::id
 ```
 
 ### a selection without items passes

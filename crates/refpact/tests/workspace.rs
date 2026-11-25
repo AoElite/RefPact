@@ -2,7 +2,7 @@
 
 use std::sync::LazyLock;
 
-use refpact::{all, any_of, rule, Detail, ErrorCode, LoadError, Rule, Workspace};
+use refpact::{all, any_of, rule, Crate, Detail, ErrorCode, LoadError, Rule, Workspace};
 
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/rust/workspace");
 
@@ -69,7 +69,9 @@ fn the_members_and_modules_of_a_workspace() {
             "shop_domain::tests",
             "shop_storage",
             "shop_storage::db",
-            "shop_storage::stored"
+            "shop_storage::stored",
+            // A module of the program of the package, `src/main.rs`.
+            "shop_storage::cli"
         ]
     );
 
@@ -162,8 +164,72 @@ fn rules_across_crates() {
                 ("crates/storage/src/db.rs", 3, "shop_domain::Order"),
                 ("crates/storage/src/db.rs", 7, "shop_domain::Order"),
                 ("crates/storage/src/db.rs", 11, "shop_domain::order::Order"),
+                // The library and the program both declare `stored.rs`. It is read once.
                 ("crates/storage/src/stored.rs", 5, "shop_domain::Order"),
+                ("crates/storage/src/cli.rs", 9, "shop_domain::Order"),
             ])
+        );
+    }
+    {
+        // The program of a package is read with its library, as one crate. It names the
+        // library as another crate does, and that is a path of the crate itself.
+        let together = rule("the program does not use the database")
+            .modules(any_of(["shop_storage::cli"]))
+            .must_not_use(any_of(["shop_storage::db"]));
+        assert_eq!(
+            uses(&together),
+            owned(&[
+                ("crates/storage/src/cli.rs", 3, "shop_storage::db::Db"),
+                ("crates/storage/src/cli.rs", 5, "shop_storage::db::Db"),
+                (
+                    "crates/storage/src/cli.rs",
+                    6,
+                    "shop_storage::db::Db::default"
+                ),
+                ("crates/storage/src/cli.rs", 9, "shop_storage::db::Db"),
+                // A method call, which rust-analyzer resolves in the program too.
+                (
+                    "crates/storage/src/cli.rs",
+                    10,
+                    "shop_storage::db::Db::save"
+                ),
+            ])
+        );
+        // A load of the package alone has the same code, with `crate` for its name.
+        let alone = Crate::options(format!("{FIXTURE}/crates/storage"))
+            .resolving_members()
+            .load()
+            .unwrap();
+        let found = rule("the program does not use the database")
+            .modules(any_of(["crate::cli"]))
+            .must_not_use(any_of(["crate::db"]))
+            .evaluate(&alone)
+            .unwrap();
+        let found: Vec<(&str, u32)> = found
+            .iter()
+            .map(|violation| (violation.file.as_str(), violation.line))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                ("src/cli.rs", 3),
+                ("src/cli.rs", 5),
+                ("src/cli.rs", 6),
+                ("src/cli.rs", 9),
+                ("src/cli.rs", 10)
+            ]
+        );
+        // A load that names its root reads that crate only: the module of the program is
+        // then a file that nothing reaches.
+        let library = Crate::options(format!("{FIXTURE}/crates/storage"))
+            .root("src/lib.rs")
+            .load()
+            .unwrap_err();
+        assert_eq!(
+            library,
+            LoadError::UnreachedFiles {
+                files: vec!["src/cli.rs".to_owned()]
+            }
         );
     }
     {

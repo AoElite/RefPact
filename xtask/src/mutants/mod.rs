@@ -314,14 +314,20 @@ fn write(path: &Path, text: &str) {
         .unwrap_or_else(|error| panic!("cannot write {}: {error}", path.display()));
 }
 
-/// Runs a command to its end. Gives its exit code (-1 when a signal stopped it) and its
-/// output and error output together.
+/// The longest that a build or a whole run of the tests may take. A command that takes
+/// longer does not end by itself.
+const RUN_LIMIT: Duration = Duration::from_secs(30 * 60);
+
+/// Runs a command to its end, for at most [`RUN_LIMIT`]. Gives its exit code (-1 when a
+/// signal stopped it) and its output and error output together.
 fn output(command: &mut Command) -> (i32, String) {
-    let output = command
-        .output()
-        .unwrap_or_else(|error| panic!("cannot run {command:?}: {error}"));
-    let text = String::from_utf8_lossy(&output.stdout) + String::from_utf8_lossy(&output.stderr);
-    (output.status.code().unwrap_or(-1), text.into_owned())
+    let Some((code, stdout, stderr)) = output_within(command, RUN_LIMIT) else {
+        panic!(
+            "{command:?} did not end in {} minutes and was stopped",
+            RUN_LIMIT.as_secs() / 60
+        );
+    };
+    (code, stdout + &stderr)
 }
 
 /// Runs a command for at most `limit`. Gives its exit code, output and error output, or

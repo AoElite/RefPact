@@ -195,6 +195,7 @@ export class NamedRule {
       subjects,
       file: filePattern,
       target: targetPattern,
+      targets: coreTargets,
     });
   }
 }
@@ -676,6 +677,13 @@ export function orFailure<T>(make: () => T): T | Failure {
   }
 }
 
+/** Throws an {@link ArchitectureError} when a rule failed. @internal */
+export function passes(failure: Failure | undefined): void {
+  if (failure !== undefined) {
+    throw new ArchitectureError(failure);
+  }
+}
+
 /** The error that `check` throws. Its message is the report. */
 export class ArchitectureError extends Error {
   /** Why the rule did not pass. */
@@ -813,10 +821,7 @@ export class ImportRule {
    * `import.meta.dirname`.
    */
   checkDiagram(project: Project, file: string): void {
-    const failure = this.verifyDiagram(project, file);
-    if (failure !== undefined) {
-      throw new ArchitectureError(failure);
-    }
+    passes(this.verifyDiagram(project, file));
   }
 
   /** @internal The diagram of the rule with these nodes. */
@@ -831,10 +836,7 @@ export class ImportRule {
 
   /** Throws an {@link ArchitectureError} when the rule is violated or cannot be evaluated. */
   check(project: Project): void {
-    const failure = this.verify(project);
-    if (failure !== undefined) {
-      throw new ArchitectureError(failure);
-    }
+    passes(this.verify(project));
   }
 
   /**
@@ -875,10 +877,7 @@ export class ImportRule {
    * does not accept, when the baseline has stale entries, or when the rule cannot be evaluated.
    */
   checkWithBaseline(project: Project, baseline: Baseline): void {
-    const failure = this.verifyWithBaseline(project, baseline);
-    if (failure !== undefined) {
-      throw new ArchitectureError(failure);
-    }
+    passes(this.verifyWithBaseline(project, baseline));
   }
 
   /**

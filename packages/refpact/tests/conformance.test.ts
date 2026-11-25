@@ -40,7 +40,7 @@ function pathEquals(a: Path, b: Path): boolean {
 }
 
 /** The number of cases the directory holds. A harness that runs fewer cases must fail. */
-const EXPECTED_CASES = 303;
+const EXPECTED_CASES = 305;
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };
@@ -181,6 +181,7 @@ function factSet(json: JsonObject, separator: string): FactSet {
       };
     }),
     itemKinds: strings(json["item_kinds"], "item_kinds"),
+    memberKinds: strings(json["member_kinds"], "member_kinds"),
     visibilities: strings(json["visibilities"], "visibilities"),
     relations: strings(json["relations"], "relations"),
     modifiers: strings(json["modifiers"], "modifiers"),

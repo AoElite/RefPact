@@ -387,17 +387,9 @@ impl ItemSelection {
     }
 
     fn rule(self, must: Demand) -> Rule {
-        // Members are selected only when the kinds name them.
-        let kinds = self.kinds.unwrap_or_else(|| {
-            item_kind::ALL
-                .iter()
-                .filter(|kind| ![item_kind::FIELD, item_kind::METHOD].contains(kind))
-                .map(|kind| (*kind).to_owned())
-                .collect()
-        });
         let items = Items {
             named: self.named,
-            kinds: Some(kinds),
+            kinds: self.kinds,
             visibilities: self.visibilities,
             related: self.related,
             modifiers: self.modifiers,

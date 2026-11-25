@@ -224,9 +224,7 @@ impl Layers {
     /// layers. See [`Rule::check_diagram`].
     #[track_caller]
     pub fn check_diagram(&self, krate: &Crate, file: impl AsRef<std::path::Path>) {
-        if let Err(failure) = self.verify_diagram(krate, file) {
-            panic!("{failure}");
-        }
+        crate::passes(self.verify_diagram(krate, file));
     }
 
     /// For each layer, by position from the top, the layers it may use. The error lists

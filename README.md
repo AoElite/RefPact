@@ -128,11 +128,11 @@ The report shows that refpact follows a name through a barrel file to the file t
 | Specifiers that the code computes: `` import(`./locales/${name}.ts`) `` | | candidates, and `mustNotContain("computed-import")` |
 | `.svelte`, `.vue` and `.astro` files | | `components` |
 | A call through a trait or an interface also counts for each implementation | `following_implementations` | `followImplementations` |
-| Fields and methods: visibility, parameter, return and field types | `items(..).of_kind([Field, Method])` | |
+| Fields and methods: visibility, parameter, return and field types | `items(..).of_kind([Field, Method])` | `items(..).ofKind("field", "method")` |
 | The types that a function takes or returns, or that a field or a variable has | `items(..).returning`, `taking`, `of_type` | `items(..).returning`, `taking`, `ofType` |
 | Types that extend or implement a type, at any depth | `items(..).implementing`: a type has an `impl` for each trait | `items(..).assignableTo` |
 | Modifiers: `async`, `unsafe`, documented, and more | `items(..).with_modifier`, `must_have_modifier` | `items(..).withModifier`, `mustHaveModifier` |
-| What the code of an item may use | `items(..).must_not_use`, `must_only_use` | |
+| What the code of an item may use | `items(..).must_not_use`, `must_only_use` | `items(..).mustNotImport`, `mustOnlyImport`, with `resolveUses` |
 | An onion (hexagonal) architecture | `onion_architecture` | `onionArchitecture` |
 | Say why a rule exists, in its report | `because` | `because` |
 | Report a rule without failing the check | `as_warning` | `asWarning` |

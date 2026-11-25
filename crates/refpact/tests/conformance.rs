@@ -24,7 +24,7 @@ use refpact::core::{
 use serde_json::{json, Value};
 
 /// The number of cases the directory holds. A harness that runs fewer cases must fail.
-const EXPECTED_CASES: usize = 303;
+const EXPECTED_CASES: usize = 305;
 
 /// The case files in the order of their names: the file name and the content.
 fn case_files() -> Vec<(String, Value)> {
@@ -236,7 +236,7 @@ fn wire_facts(facts: &FactSet) -> Value {
         "kinds": facts.kinds, "markers": facts.markers, "tags": facts.tags,
         "facts": facts.facts.iter().map(fact).collect::<Vec<_>>(),
         "declarations": facts.declarations.iter().map(declaration).collect::<Vec<_>>(),
-        "itemKinds": facts.item_kinds, "visibilities": facts.visibilities,
+        "itemKinds": facts.item_kinds, "memberKinds": facts.member_kinds, "visibilities": facts.visibilities,
         "relations": facts.relations, "modifiers": facts.modifiers,
         "properties": facts.properties,
     })
@@ -450,6 +450,7 @@ fn fact_set(json: &Value, separator: &str) -> FactSet {
                 .collect(),
         },
         item_kinds: strings(&json["item_kinds"]),
+        member_kinds: strings(&json["member_kinds"]),
         visibilities: strings(&json["visibilities"]),
         relations: strings(&json["relations"]),
         modifiers: strings(&json["modifiers"]),

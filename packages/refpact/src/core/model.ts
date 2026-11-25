@@ -31,6 +31,12 @@ export interface FactSet {
   readonly declarations?: readonly Declaration[];
   /** All item kinds the front end can produce. Default: none. */
   readonly itemKinds?: readonly string[];
+  /**
+   * The item kinds of the members of items, such as the fields and the methods of a class.
+   * A rule about items selects a declaration of such a kind only when the kinds of the rule
+   * name it. Default: none.
+   */
+  readonly memberKinds?: readonly string[];
   /** All visibilities the front end can produce. Default: none. */
   readonly visibilities?: readonly string[];
   /** All relations the front end can produce. Default: none. */

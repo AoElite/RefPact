@@ -111,6 +111,14 @@ it("a member of the own file, of an object type and of the standard library is n
 it("a rule about imports sees the uses of members", () => {
   const found = violations(rule("the ui does not save").files(anyOf("src/ui/**")).mustNotImport(anyOf("src/domain/entity.ts")));
   expect(found).toEqual(["src/ui/view.ts:6 src/domain/entity.ts#Entity#save", "src/ui/view.ts:10 src/domain/entity.ts#Entity#id"]);
+  // Two filters of kinds both hold, in each order: the later one does not take the place of the other.
+  const filtered = () => rule("the ui does not save").files(anyOf("src/ui/**")).mustNotImport(anyOf("src/domain/entity.ts"));
+  expect(violations(filtered().ignoringKinds("member").ignoringTypeImports())).toEqual([]);
+  expect(violations(filtered().ignoringTypeImports().ignoringKinds("member"))).toEqual([]);
+  expect(violations(filtered().ignoringKinds("member").onlyKinds("member", "import"))).toEqual([]);
+  expect(violations(filtered().onlyKinds("import").onlyKinds("member", "import"))).toEqual([]);
+  expect(violations(filtered().onlyKinds("member", "import").ignoringKinds("member"))).toEqual([]);
+  expect(violations(filtered().onlyKinds("member", "import").ignoringKinds("import"))).toEqual(found);
   // The ui imports no name of `entity.ts`, so without the members the rule finds nothing.
   expect(violations(rule("the ui does not save").files(anyOf("src/ui/**")).mustNotImport(anyOf("src/domain/entity.ts")), plain)).toEqual([]);
 });

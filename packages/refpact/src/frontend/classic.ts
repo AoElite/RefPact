@@ -2,8 +2,9 @@
  * The compiler backend for TypeScript 6.
  *
  * TypeScript 6 is the last version whose compiler is JavaScript. It runs in this process,
- * through the stable API of the `typescript` package, so no answer is a round trip and
- * nothing is kept between calls.
+ * through the stable API of the `typescript` package, so no answer is a round trip. Between
+ * the loads of one process, only the syntax trees of installed packages are kept: see
+ * {@link PackageFiles}.
  *
  * The types come from the package `typescript-6`, an alias of TypeScript 6 that only the
  * development of refpact installs. The code that runs is the installed `typescript`.
@@ -46,6 +47,11 @@ function open(ts: Compiler, configFile: string, files: ComponentFiles | undefine
   const host = ts.createCompilerHost(parsed.options, true);
   host.readFile = system.readFile;
   host.fileExists = system.fileExists;
+  const read = host.getSourceFile.bind(host);
+  const kept = packageFiles(parsed.options);
+  // The size and the time of change of a file, as the compiler reads them.
+  const state = (fileName: string): string => `${ts.sys.getFileSize?.(fileName)} ${ts.sys.getModifiedTime?.(fileName)?.getTime()}`;
+  host.getSourceFile = (fileName, ...more) => kept.get(fileName, state, () => read(fileName, ...more));
   // An import of a referenced project leads to its source, as with TypeScript 7, and not to
   // the declaration files of a build that may not exist.
   (host as { useSourceOfProjectReferenceRedirect?: () => boolean }).useSourceOfProjectReferenceRedirect = () => true;
@@ -88,6 +94,62 @@ function open(ts: Compiler, configFile: string, files: ComponentFiles | undefine
       (native(symbol).flags & Flags.Alias) === 0 ? undefined : known(checker, checker.getImmediateAliasedSymbol(native(symbol))),
     exportsOf: (module) => new Map(checker.getExportsOfModule(native(module)).map((symbol) => [symbol.name, symbol])),
   };
+}
+
+/**
+ * The syntax trees of the files of installed packages, for the loads of one process with
+ * the same compiler options: the library of the compiler, and the declarations of the
+ * packages in `node_modules`.
+ *
+ * Most files of a program are such files, and a second load in a process, as of the next
+ * tsconfig file of a workspace, would parse and bind each of them again. The compiler takes
+ * a tree that another program has used, as its language service does for each new version
+ * of a program. A file is read again when its size or its time of change is another.
+ */
+class PackageFiles {
+  private readonly files = new Map<string, { readonly file: TS.SourceFile; readonly state: string }>();
+
+  /** The file `fileName`: the kept one while `stateOf` gives the same text for it, and what `read` gives otherwise. */
+  get(fileName: string, stateOf: (fileName: string) => string, read: () => TS.SourceFile | undefined): TS.SourceFile | undefined {
+    if (!fileName.includes("/node_modules/")) {
+      return read();
+    }
+    const state = stateOf(fileName);
+    const known = this.files.get(fileName);
+    if (known?.state === state) {
+      return known.file;
+    }
+    const file = read();
+    if (file !== undefined) {
+      this.files.set(fileName, { file, state });
+    }
+    return file;
+  }
+}
+
+/** The kept files of the last sets of compiler options, by the options as text. */
+const keptFiles = new Map<string, PackageFiles>();
+/** How many sets of options have their files kept. A process seldom loads more. */
+const KEPT_OPTIONS = 4;
+
+/**
+ * The kept files for these options. The options decide how a file is parsed and bound, so
+ * only loads with the same options share files. The place of the tsconfig file is no
+ * option of the code.
+ */
+function packageFiles(options: TS.CompilerOptions): PackageFiles {
+  const { configFilePath: _config, pathsBasePath: _paths, ...rest } = options as TS.CompilerOptions & { pathsBasePath?: unknown };
+  const key = JSON.stringify(rest);
+  const known = keptFiles.get(key);
+  if (known !== undefined) {
+    return known;
+  }
+  const made = new PackageFiles();
+  keptFiles.set(key, made);
+  if (keptFiles.size > KEPT_OPTIONS) {
+    keptFiles.delete(keptFiles.keys().next().value as string);
+  }
+  return made;
 }
 
 /** The symbol, when the compiler found what it stands for. */

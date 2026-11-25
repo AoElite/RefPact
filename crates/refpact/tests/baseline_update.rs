@@ -3,15 +3,8 @@
 
 use refpact::{any_of, layers, onion_architecture, rule, Baseline, Crate, Failure};
 
-/// Removes a temporary file or directory when the test ends, also when it fails.
-struct Removed(std::path::PathBuf);
-
-impl Drop for Removed {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+mod support;
+use support::Removed;
 
 #[test]
 fn the_environment_variables_make_the_checks_write_their_files() {

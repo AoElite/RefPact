@@ -621,6 +621,41 @@ export function collectAccesses(sourceFile: SourceFile): Node[] {
   return names;
 }
 
+/** A place where a file writes a name that it imports. */
+export interface NameSite {
+  readonly node: Node;
+  /** The shorthand property that the name is, `{ query }`: the compiler is asked for its value apart. */
+  readonly shorthand?: Node;
+}
+
+/**
+ * The places where a file writes a name that one of its imports binds, outside the import
+ * and export declarations, in the order of the text: `query` in `query(sql)` after
+ * `import { query } from "./db"`. A name after a dot and the name of a member are left out.
+ * Only the compiler can tell whether a place is a use of the import or of another variable
+ * with its name. Every node of the file is visited.
+ */
+export function collectNameSites(sourceFile: SourceFile, uses: readonly ModuleUse[]): NameSite[] {
+  const bound = uses.flatMap((use) => use.names.filter((name) => !name.kind.startsWith("export")));
+  const names = new Set(bound.map((name) => textOf(name.node as Loose)));
+  const sites: NameSite[] = [];
+  if (names.size === 0) {
+    return sites;
+  }
+  const visit = (node: Loose, parent: Loose): void => {
+    if (node.kind === K.ImportDeclaration || node.kind === K.ImportEqualsDeclaration || node.kind === K.ExportDeclaration) {
+      return;
+    }
+    const tag = parent.kind === K.JsxOpeningElement || parent.kind === K.JsxSelfClosingElement || parent.kind === K.JsxClosingElement;
+    if (node.kind === K.Identifier && names.has(textOf(node)) && ((tag && parent.tagName === node) || isValueName(node, parent))) {
+      sites.push({ node, ...(parent.kind === K.ShorthandPropertyAssignment && { shorthand: parent }) });
+    }
+    node.forEachChild((child) => visit(child as Loose, node));
+  };
+  sourceFile.forEachChild((child) => visit(child as Loose, sourceFile as Loose));
+  return sites;
+}
+
 /**
  * A name in a file that may be a global: `fetch` in `fetch(..)`, or `process` and its member
  * `env` in `process.env`. Through `globalThis`, `window`, `self` and `global`, the global is

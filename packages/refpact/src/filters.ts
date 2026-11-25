@@ -5,7 +5,7 @@
  * once, here: {@link addFilters} gives its method to all of them, so a new filter cannot be
  * missing from one.
  */
-import type { Rule as CoreRule } from "./core/index.ts";
+import type { KindFilter, Rule as CoreRule } from "./core/index.ts";
 import type { Kind } from "./frontend/imports.ts";
 import { subjects, targetPattern } from "./patterns.ts";
 import type { AnyOf, Files } from "./rules.ts";
@@ -47,10 +47,10 @@ export interface Filters<Self> {
    */
   asWarning(): Self;
 
-  /** Counts only these kinds of import. */
+  /** Counts only these kinds of import. With another filter of kinds, both hold: `onlyKinds` twice counts the kinds that both name. */
   onlyKinds(...kinds: Kind[]): Self;
 
-  /** Counts all kinds of import except these. */
+  /** Counts all kinds of import except these, also with another filter of kinds, such as `ignoringTypeImports()`. */
   ignoringKinds(...kinds: Kind[]): Self;
 
   /**
@@ -59,7 +59,10 @@ export interface Filters<Self> {
    */
   ignoringCandidates(): Self;
 
-  /** Leaves out `import type`, type-only names, `import("m")` in types, and `export type .. from`. */
+  /**
+   * Leaves out `import type`, type-only names, `import("m")` in types, and `export type .. from`.
+   * A filter of kinds before or after it holds too.
+   */
   ignoringTypeImports(): Self;
 
   /**
@@ -76,6 +79,26 @@ export interface Filters<Self> {
 
 const about = (apply: Filter["apply"]): Filter => ({ aboutImports: true, apply });
 
+/**
+ * The kinds that a rule counts when it also counts only `kinds`. Each filter of a rule
+ * holds: a later one does not take the place of an earlier one.
+ */
+function only(rule: CoreRule, kinds: readonly string[]): CoreRule {
+  const known: KindFilter = rule.kinds ?? { type: "all" };
+  const left = known.type === "all" ? kinds : kinds.filter((kind) => known.kinds.includes(kind) === (known.type === "only"));
+  return { ...rule, kinds: { type: "only", kinds: left } };
+}
+
+/** The kinds that a rule counts when it also leaves out `kinds`. */
+function except(rule: CoreRule, kinds: readonly string[]): CoreRule {
+  const known: KindFilter = rule.kinds ?? { type: "all" };
+  if (known.type === "only") {
+    return { ...rule, kinds: { type: "only", kinds: known.kinds.filter((kind) => !kinds.includes(kind)) } };
+  }
+  const ignored = known.type === "except" ? known.kinds : [];
+  return { ...rule, kinds: { type: "except", kinds: [...ignored, ...kinds.filter((kind) => !ignored.includes(kind))] } };
+}
+
 /** The methods of {@link Filters}, written once for every class that has them. */
 const methods: Filters<unknown> & ThisType<Filtered<unknown>> = {
   because(reason) {
@@ -85,16 +108,16 @@ const methods: Filters<unknown> & ThisType<Filtered<unknown>> = {
     return this.filtered({ aboutImports: false, apply: (rule) => ({ ...rule, severity: "warning" }) });
   },
   onlyKinds(...kinds) {
-    return this.filtered(about((rule) => ({ ...rule, kinds: { type: "only", kinds } })));
+    return this.filtered(about((rule) => only(rule, kinds)));
   },
   ignoringKinds(...kinds) {
-    return this.filtered(about((rule) => ({ ...rule, kinds: { type: "except", kinds } })));
+    return this.filtered(about((rule) => except(rule, kinds)));
   },
   ignoringCandidates() {
     return this.filtered(about((rule) => ({ ...rule, candidates: "ignore" })));
   },
   ignoringTypeImports() {
-    return this.filtered(about((rule) => ({ ...rule, kinds: { type: "except", kinds: ["import-type", "export-type-from"] } })));
+    return this.filtered(about((rule) => except(rule, ["import-type", "export-type-from"])));
   },
   ignoringImport(from, to) {
     // Without the types, anything gets here: packages as the files, or a selection as the targets.

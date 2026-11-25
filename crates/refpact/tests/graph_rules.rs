@@ -7,15 +7,8 @@ use refpact::{
     Layers, Rule, Violation,
 };
 
-/// Removes a temporary file or directory when the test ends, also when it fails.
-struct Removed(std::path::PathBuf);
-
-impl Drop for Removed {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+mod support;
+use support::Removed;
 
 static LAYERED: LazyLock<Crate> = LazyLock::new(|| {
     Crate::options(concat!(
@@ -150,6 +143,14 @@ fn layers_and_an_onion_have_the_filters_of_a_rule() {
     shop().only_kinds([Kind::Use]).check(&LAYERED);
     shop().ignoring_kinds([Kind::Expr]).check(&LAYERED);
     assert!(shop().only_kinds([Kind::Expr]).verify(&LAYERED).is_err());
+    // Two filters of kinds both hold. The later one does not take the place of the other.
+    let both = shop().ignoring_kinds([Kind::Expr]);
+    both.clone().ignoring_kinds([Kind::Use]).check(&LAYERED);
+    both.only_kinds([Kind::Use, Kind::Expr]).check(&LAYERED);
+    let counted = shop().only_kinds([Kind::Use, Kind::Expr]);
+    counted.ignoring_kinds([Kind::Expr]).check(&LAYERED);
+    let narrowed = shop().only_kinds([Kind::Use]);
+    narrowed.only_kinds([Kind::Use, Kind::Expr]).check(&LAYERED);
     assert!(shop().ignoring_candidates().verify(&LAYERED).is_err());
     // A warning reports and passes. A reason is in the report of each rule.
     shop().as_warning().check(&LAYERED);

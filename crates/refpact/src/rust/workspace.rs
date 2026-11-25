@@ -3,7 +3,7 @@
 //! In a workspace, a module is named by its crate: `shop_domain::order`, not `crate::order`.
 //! So a rule can say that one crate must not use another, or a module of another.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Deref;
 use std::path::{Path as FilePath, PathBuf};
 
@@ -20,7 +20,7 @@ use crate::rust::scope::Resolver;
 use crate::rust::sources::Expansions;
 use crate::rust::sources::{self, Disk, Sources};
 use crate::rust::workers;
-use crate::rust::{analyse_tree, cfg, read_index, read_packages, resolve, Crate};
+use crate::rust::{analyse_tree, cfg, check_unreached, read_index, read_packages, resolve, Crate};
 
 /// The crates of one workspace, analysed together.
 ///
@@ -129,6 +129,9 @@ struct Spec {
     /// The files that can be its root, relative to its directory. The first that is there
     /// is the root.
     roots: Vec<String>,
+    /// The root files of the other programs of its package. Each is a crate of its own for
+    /// the compiler; the load reads them as more code of this crate.
+    programs: Vec<String>,
     /// The place of its package in what Cargo names. `None` for a crate without a manifest.
     package: Option<usize>,
 }
@@ -163,6 +166,7 @@ fn specs(disk: &Disk, plan: Plan, graph: Option<&Graph>) -> Result<Vec<Spec>, Lo
                 dir: String::new(),
             },
             roots: root.map_or_else(usual_roots, |root| vec![root]),
+            programs: Vec::new(),
             package: None,
         }]);
     };
@@ -183,21 +187,22 @@ fn specs(disk: &Disk, plan: Plan, graph: Option<&Graph>) -> Result<Vec<Spec>, Lo
     let spec = |name: &str, dir: &str, place: usize, root: Option<String>| {
         let package = &graph.packages()[place];
         let file = sources::join(dir, "Cargo.toml");
-        let roots = match (root, &package.root) {
-            (Some(root), _) => vec![root],
+        let below = |root: &PathBuf| {
+            let manifest_dir = package.manifest.parent();
+            let below = manifest_dir.and_then(|dir| root.strip_prefix(dir).ok());
+            below.map(slashes).ok_or_else(|| {
+                let message = "the root file of the crate is outside the directory of the package";
+                wrong(file.clone(), message.to_owned())
+            })
+        };
+        // A load that names its root reads that crate only.
+        let (roots, programs) = match (root, &package.root) {
+            (Some(root), _) => (vec![root], Vec::new()),
             (None, Some(root)) => {
-                let below = package
-                    .manifest
-                    .parent()
-                    .and_then(|dir| root.strip_prefix(dir).ok());
-                let below = below.ok_or_else(|| {
-                    let message =
-                        "the root file of the crate is outside the directory of the package";
-                    wrong(file.clone(), message.to_owned())
-                })?;
-                vec![slashes(below)]
+                let programs = package.programs.iter().map(below);
+                (vec![below(root)?], programs.collect::<Result<_, _>>()?)
             }
-            (None, None) => usual_roots(),
+            (None, None) => (usual_roots(), Vec::new()),
         };
         Ok(Spec {
             member: Member {
@@ -205,6 +210,7 @@ fn specs(disk: &Disk, plan: Plan, graph: Option<&Graph>) -> Result<Vec<Spec>, Lo
                 dir: dir.to_owned(),
             },
             roots,
+            programs,
             package: Some(place),
         })
     };
@@ -326,36 +332,50 @@ pub(crate) fn load(dir: PathBuf, plan: Plan, mut common: Common) -> Result<Works
             .ok_or_else(|| LoadError::RootNotFound {
                 tried: spec.roots.clone(),
             });
-        let plan = root.map(|root| (member_disk, root, allowed));
+        let plan = root.map(|root| {
+            let roots = std::iter::once(root).chain(spec.programs.iter().cloned());
+            (member_disk, roots.collect(), allowed)
+        });
         planned.push((spec, plan));
     }
 
-    // The members are analysed at the same time. Each analysis has the threads of its own.
-    let analyse = |place: usize| {
+    // Each root of each member, by the place of the member and that of the root.
+    let roots: Vec<(usize, usize)> = planned
+        .iter()
+        .enumerate()
+        .flat_map(|(place, (_, plan))| {
+            let count = plan.as_ref().map_or(0, |(_, roots, _)| roots.len());
+            (0..count).map(move |root| (place, root))
+        })
+        .collect();
+    // The crates are analysed at the same time. Each analysis has the threads of its own.
+    let analyse = |job: usize| {
+        let (place, root) = roots[job];
         let (_, plan) = &planned[place];
-        let (member_disk, root, allowed) = plan.as_ref().map_err(Clone::clone)?;
-        analyse_tree(member_disk, root, allowed, calls, &common.settings)
+        let (member_disk, roots, _) = plan.as_ref().map_err(Clone::clone)?;
+        analyse_tree(member_disk, &roots[root], calls, &common.settings)
     };
     let mut analysed: Vec<Option<Result<Analysed, LoadError>>> =
-        planned.iter().map(|_| None).collect();
+        roots.iter().map(|_| None).collect();
     workers::with_pool(
-        || |place: usize| (place, analyse(place)),
+        || |job: usize| (job, analyse(job)),
         |pool| {
             let mut waiting = 0;
-            for place in 0..planned.len() {
-                match pool.give(place) {
+            for job in 0..roots.len() {
+                match pool.give(job) {
                     Ok(()) => waiting += 1,
-                    Err(place) => analysed[place] = Some(analyse(place)),
+                    Err(job) => analysed[job] = Some(analyse(job)),
                 }
             }
             for _ in 0..waiting {
-                let (place, found) = pool.reply();
-                analysed[place] = Some(found);
+                let (job, found) = pool.reply();
+                analysed[job] = Some(found);
             }
         },
     );
 
-    for ((spec, _), found) in planned.into_iter().zip(analysed) {
+    let mut analysed = analysed.into_iter();
+    for (spec, plan) in planned {
         let Member { name, dir } = &spec.member;
         // An error of the one crate of a load names no member.
         let in_member = |error: LoadError| match single {
@@ -365,10 +385,31 @@ pub(crate) fn load(dir: PathBuf, plan: Plan, mut common: Common) -> Result<Works
                 error: Box::new(error),
             },
         };
-        let found = found.unwrap_or_else(|| unreachable!("each member has one reply"));
-        let (tree, mut facts, impls, pending) = found.map_err(in_member)?;
-        if let (Some(graph), Some(place)) = (&graph, spec.package) {
-            add_crates_of_renamed(&mut facts, &graph.renamed(place));
+        let (member_disk, roots, allowed) = plan.map_err(in_member)?;
+        let mut found: Vec<Analysed> = Vec::new();
+        for reply in analysed.by_ref().take(roots.len()) {
+            let reply = reply.unwrap_or_else(|| unreachable!("each root has one reply"));
+            found.push(reply.map_err(in_member)?);
+        }
+        let trees: Vec<&Tree> = found.iter().map(|(tree, ..)| tree).collect();
+        check_unreached(&member_disk, &roots[0], &trees, &allowed).map_err(in_member)?;
+
+        let package = graph.as_ref().zip(spec.package);
+        let first = loaded.len();
+        for (tree, mut facts, mut impls, mut pending) in found {
+            if loaded.len() > first {
+                leave_shared(&loaded[first..], &tree, &mut facts, &mut pending);
+                if let Some((graph, place)) = package {
+                    let library = &graph.packages()[place].krate;
+                    name_library(&mut facts, &mut impls, library);
+                }
+            }
+            if let Some((graph, place)) = package {
+                add_crates_of_renamed(&mut facts, &graph.renamed(place));
+            }
+            loaded.push((spec.member.clone(), tree, facts, impls, pending));
+        }
+        if let Some((graph, place)) = package {
             if common.dependencies {
                 let manifest_file = sources::join(dir, "Cargo.toml");
                 let text = disk.read(&manifest_file).unwrap_or_default();
@@ -377,7 +418,6 @@ pub(crate) fn load(dir: PathBuf, plan: Plan, mut common: Common) -> Result<Works
             }
             packages.insert(graph.packages()[place].name.clone(), name.clone());
         }
-        loaded.push((spec.member, tree, facts, impls, pending));
     }
     let unused: Vec<String> = common
         .allowed
@@ -456,12 +496,94 @@ fn add_crates_of_renamed(facts: &mut FactSet, renamed: &[(String, String)]) {
     }
 }
 
-/// One analysed member: its module tree, its facts and its `impl` blocks.
+/// A program names the library of its package as other crates do: `shop::Order`. The load
+/// reads both as one crate, so the path is one of the crate itself.
+fn name_library(facts: &mut FactSet, impls: &mut [Impl], library: &str) {
+    let own = |path: &mut Path| {
+        if path.first().map(String::as_str) == Some(library) {
+            path[0] = "crate".to_owned();
+        }
+    };
+    for fact in &mut facts.facts {
+        if let What::Reference(reference) = &mut fact.what {
+            own(&mut reference.target);
+            reference.aliases.iter_mut().for_each(own);
+        }
+    }
+    let relations = facts
+        .declarations
+        .iter_mut()
+        .flat_map(|item| &mut item.relations);
+    relations.for_each(|tie| own(&mut tie.target));
+    for found in impls {
+        found
+            .types
+            .iter_mut()
+            .chain(&mut found.traits)
+            .for_each(own);
+    }
+}
+
+/// Makes a program of a package more code of the crate that `earlier` has: the crates of
+/// the package that are read already.
+///
+/// - A module that both have is one module, as the roots of the two are: `crate`.
+/// - A file that both declare as a module, such as `mod config;` in `lib.rs` and in
+///   `main.rs`, is read as code of the first of them only. Otherwise each of its references
+///   would be there twice.
+fn leave_shared(earlier: &[Loaded], tree: &Tree, facts: &mut FactSet, pending: &mut Pending) {
+    let known: HashSet<&Path> = earlier
+        .iter()
+        .flat_map(|(_, _, facts, ..)| facts.units.iter().chain(&facts.items))
+        .collect();
+    let mut kept = facts.units.iter().map(|unit| !known.contains(unit));
+    facts.unit_lines.retain(|_| kept.next().unwrap_or(true));
+    let mut kept = facts.units.iter().map(|unit| !known.contains(unit));
+    facts.unit_files.retain(|_| kept.next().unwrap_or(true));
+    facts.units.retain(|unit| !known.contains(unit));
+    facts.items.retain(|item| !known.contains(item));
+
+    let read: HashSet<&str> = earlier
+        .iter()
+        .flat_map(|(_, tree, ..)| &tree.files)
+        .map(|file| file.path.as_str())
+        .collect();
+    let files = tree.files.iter().map(|file| file.path.as_str());
+    let shared: HashSet<&str> = files.filter(|file| read.contains(file)).collect();
+    if shared.is_empty() {
+        return;
+    }
+    let is_shared = |file: &String| shared.contains(file.as_str());
+    facts.declarations.retain(|item| !is_shared(&item.file));
+
+    // A site belongs before a fact, by the position of the fact: the positions change.
+    let mut left = 0;
+    let mut moved: Vec<usize> = Vec::with_capacity(facts.facts.len() + 1);
+    for fact in &facts.facts {
+        moved.push(left);
+        left += usize::from(!is_shared(&fact.file));
+    }
+    moved.push(left);
+    pending.sites.retain(|(_, site)| !is_shared(&site.file));
+    for (position, _) in &mut pending.sites {
+        *position = moved[*position];
+    }
+    facts.facts.retain(|fact| !is_shared(&fact.file));
+    pending
+        .impl_fns
+        .retain(|function| !is_shared(&function.file));
+    pending.ends.retain(|((file, ..), _)| !is_shared(file));
+    pending.macros.retain(|site| !is_shared(&site.file));
+}
+
+/// One analysed crate: its module tree, its facts and its `impl` blocks. A package with
+/// programs is several, with the same member.
 type Loaded = (Member, Tree, FactSet, Vec<Impl>, Pending);
 
-/// What the analysis of one crate needs: its directory, its root and the files that it may
-/// leave unreached. An error: the crate has no analysis.
-type Planned = Result<(Disk, String, Vec<String>), LoadError>;
+/// What the analysis of one member needs: its directory, its root with the roots of its
+/// programs, and the files that it may leave unreached. An error: the member has no
+/// analysis.
+type Planned = Result<(Disk, Vec<String>, Vec<String>), LoadError>;
 
 /// What the analysis of one crate gives.
 type Analysed = (Tree, FactSet, Vec<Impl>, Pending);
@@ -491,9 +613,12 @@ fn merge(
         .map(|(_, _, facts, ..)| std::mem::take(facts))
         .collect();
     let macros: Vec<Vec<MacroSite>> = found.iter().map(|found| found.macros.clone()).collect();
+    // A name is that of the first crate that has it: the library of a package, before its
+    // programs.
     let names: BTreeMap<&str, usize> = loaded
         .iter()
         .enumerate()
+        .rev()
         .map(|(index, (member, ..))| (member.name.as_str(), index))
         .collect();
     let rename = |path: &mut Path, name: &str| {
@@ -596,6 +721,7 @@ fn merge(
         merged.kinds = facts.kinds;
         merged.markers = facts.markers;
         merged.item_kinds = facts.item_kinds;
+        merged.member_kinds = facts.member_kinds;
         merged.visibilities = facts.visibilities;
         merged.relations = facts.relations;
         merged.modifiers = facts.modifiers;
@@ -644,7 +770,8 @@ fn merge(
         packages::add(&mut merged, found);
     }
     cfg::finish(&mut merged, settings);
-    let members = loaded.into_iter().map(|(member, ..)| member).collect();
+    let mut members: Vec<Member> = loaded.into_iter().map(|(member, ..)| member).collect();
+    members.dedup();
     Workspace {
         code: Crate::new(merged),
         members,

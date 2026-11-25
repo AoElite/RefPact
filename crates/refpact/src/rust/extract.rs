@@ -164,16 +164,13 @@ impl<'a> Extractor<'a> {
             return;
         }
         for attr in attrs {
-            let path = attr.path();
-            let (Some(first), Some(name)) = (path.segments.first(), path.segments.last()) else {
+            let (Some((head, single)), Some(name)) =
+                (attribute_head(attr), attr.path().segments.last())
+            else {
                 continue;
             };
-            let head = ident(&first.ident);
-            let single = path.segments.len() == 1 && path.leading_colon.is_none();
             if single && head == "derive" {
-                let derived =
-                    attr.parse_args_with(Punctuated::<syn::Path, Token![,]>::parse_terminated);
-                for derived in derived.iter().flatten() {
+                for derived in derived_paths(attr).iter().flatten() {
                     // The derives of the language write code that uses the language only.
                     let name = derived.segments.last().map(|segment| &segment.ident);
                     let single = derived.segments.len() == 1;
@@ -309,15 +306,11 @@ impl<'a> Extractor<'a> {
         };
         for attr in attrs {
             let path = attr.path();
-            let Some(first) = path.segments.first() else {
+            let Some((head, single)) = attribute_head(attr) else {
                 continue;
             };
-            let head = ident(&first.ident);
-            let single = path.segments.len() == 1 && path.leading_colon.is_none();
             if single && head == "derive" {
-                let Ok(paths) =
-                    attr.parse_args_with(Punctuated::<syn::Path, Token![,]>::parse_terminated)
-                else {
+                let Ok(paths) = derived_paths(attr) else {
                     continue;
                 };
                 for derived in &paths {
@@ -1079,6 +1072,19 @@ impl<'ast> Visit<'ast> for TypePaths<'ast> {
     }
 
     fn visit_macro(&mut self, _: &'ast syn::Macro) {}
+}
+
+/// The first name of the path of an attribute, and whether the path is that name alone.
+fn attribute_head(attr: &Attribute) -> Option<(String, bool)> {
+    let path = attr.path();
+    let first = path.segments.first()?;
+    let single = path.segments.len() == 1 && path.leading_colon.is_none();
+    Some((ident(&first.ident), single))
+}
+
+/// The paths that a `derive` attribute names.
+fn derived_paths(attr: &Attribute) -> syn::Result<Punctuated<syn::Path, Token![,]>> {
+    attr.parse_args_with(Punctuated::parse_terminated)
 }
 
 fn punct(token: &TokenTree) -> Option<char> {

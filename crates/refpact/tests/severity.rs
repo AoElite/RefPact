@@ -22,14 +22,8 @@ fn api_uses_db() -> refpact::Rule {
         .must_not_use(any_of(["crate::db"]))
 }
 
-/// Removes a file when it goes out of scope.
-struct Removed(std::path::PathBuf);
-
-impl Drop for Removed {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-    }
-}
+mod support;
+use support::Removed;
 
 #[test]
 fn a_warning_passes_with_its_violations() {

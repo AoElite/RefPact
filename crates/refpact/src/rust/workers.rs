@@ -23,6 +23,14 @@ enum Message<Job> {
     Last(Job),
 }
 
+/// Starts a thread for one job that the caller does not wait for at once: to read what a
+/// program writes while the caller waits for the program, or to wait for a limit.
+pub(crate) fn in_background<T: Send + 'static>(
+    job: impl FnOnce() -> T + Send + 'static,
+) -> thread::JoinHandle<T> {
+    thread::spawn(job)
+}
+
 /// The threads of one call of [`with_pool`].
 pub(crate) struct Pool<'scope, 'env, Job, Reply, Start> {
     scope: &'scope thread::Scope<'scope, 'env>,

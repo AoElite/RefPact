@@ -4,15 +4,20 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
-use std::io::{BufRead, BufReader, PipeReader, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::Mutex;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
 use super::schemata::{self, Change};
 use super::{
-    copy_tree, output, read, say, slashed, symlink, tail, write, Mutation, Outcome, Suite,
+    copy_tree, output, output_within, read, say, slashed, symlink, tail, write, Mutation, Outcome,
+    Suite,
 };
 
 pub struct TypeScript {
@@ -50,9 +55,14 @@ pub struct Fast {
 struct Server {
     child: Child,
     stdin: Option<ChildStdin>,
-    /// Its output and error output together.
-    output: BufReader<PipeReader>,
+    /// The lines of its output and error output together, from a thread that reads them,
+    /// so that a wait for a line can end.
+    output: Mutex<Receiver<String>>,
 }
+
+/// The longest that a Vitest process may take for one answer, and node for the blocks of
+/// the mutations. A process that takes longer is stopped.
+const ANSWER_LIMIT: Duration = Duration::from_secs(10 * 60);
 
 impl TypeScript {
     pub fn new(root: &Path) -> Self {
@@ -204,10 +214,20 @@ impl TypeScript {
             .unwrap_or_else(|error| panic!("cannot start Vitest: {error}"));
         // The command holds the other ends of the pipe; the reader sees its end only without them.
         drop(command);
+        let (lines, output) = mpsc::channel();
+        thread::spawn(move || {
+            let mut reader = BufReader::new(reader);
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                if lines.send(std::mem::take(&mut line)).is_err() {
+                    break;
+                }
+            }
+        });
         Server {
             stdin: child.stdin.take(),
             child,
-            output: BufReader::new(reader),
+            output: Mutex::new(output),
         }
     }
 
@@ -219,13 +239,23 @@ impl TypeScript {
             .and_then(|()| stdin.flush())
             .expect("a Vitest process takes requests");
         let mut text = String::new();
-        let mut line = String::new();
+        let end = Instant::now() + ANSWER_LIMIT;
         loop {
-            line.clear();
-            let read = server.output.read_line(&mut line).unwrap_or(0);
-            if read == 0 {
-                panic!("a Vitest process stopped:\n{}", tail(&text, 2000));
-            }
+            let left = end.saturating_duration_since(Instant::now());
+            let line = match server.output.get_mut().unwrap().recv_timeout(left) {
+                Ok(line) => line,
+                Err(RecvTimeoutError::Disconnected) => {
+                    panic!("a Vitest process stopped:\n{}", tail(&text, 2000))
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    let _ = server.child.kill();
+                    panic!(
+                        "a Vitest process gave no answer in {} minutes and was stopped:\n{}",
+                        ANSWER_LIMIT.as_secs() / 60,
+                        tail(&text, 2000)
+                    )
+                }
+            };
             if let Some(answer) = line.strip_prefix("@@result ") {
                 let answer: Value = serde_json::from_str(answer).expect("an answer in JSON");
                 let failed: BTreeSet<String> = strings(&answer["failed"]).into_iter().collect();
@@ -252,6 +282,12 @@ impl TypeScript {
     fn stop(server: Option<Server>) {
         if let Some(mut server) = server {
             drop(server.stdin.take());
+            // Without requests the process ends. One that does not is stopped.
+            let end = Instant::now() + Duration::from_secs(30);
+            while matches!(server.child.try_wait(), Ok(None)) && Instant::now() < end {
+                thread::sleep(Duration::from_millis(20));
+            }
+            let _ = server.child.kill();
             let _ = server.child.wait();
         }
     }
@@ -367,20 +403,19 @@ impl Suite for TypeScript {
         }
         let request_file = copy.join("mutation-blocks.json");
         write(&request_file, &Value::Object(request).to_string());
-        let parsed = Command::new("node")
+        let mut parse = Command::new("node");
+        parse
             .arg(self.root.join("xtask").join("node").join("ts-blocks.mjs"))
             .arg(&request_file)
-            .current_dir(&copy)
-            .output()
-            .unwrap_or_else(|error| panic!("cannot run node: {error}"));
+            .current_dir(&copy);
+        let parsed = output_within(&mut parse, ANSWER_LIMIT);
         let _ = fs::remove_file(&request_file);
-        let blocks: Option<Value> = parsed
-            .status
-            .success()
-            .then(|| serde_json::from_slice(&parsed.stdout).ok())
+        let (code, stdout, errors) =
+            parsed.unwrap_or_else(|| (-1, String::new(), "node did not end in time".to_owned()));
+        let blocks: Option<Value> = (code == 0)
+            .then(|| serde_json::from_str(&stdout).ok())
             .flatten();
         let Some(blocks) = blocks else {
-            let errors = String::from_utf8_lossy(&parsed.stderr);
             say(&format!(
                 "note      ts: the blocks of the mutations were not found; every mutation runs on its own\n{}",
                 tail(&errors, 1500)

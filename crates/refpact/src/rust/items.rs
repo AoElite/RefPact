@@ -29,6 +29,8 @@ pub(crate) mod item_kind {
     pub(crate) const FIELD: &str = "field";
     /// A function of an inherent `impl` or of a trait, at the path of its type or trait.
     pub(crate) const METHOD: &str = "method";
+    /// The kinds of the members of items. A rule selects them only when it names them.
+    pub(crate) const MEMBERS: &[&str] = &[FIELD, METHOD];
     /// All item kinds.
     pub(crate) const ALL: &[&str] = &[
         FN, STRUCT, ENUM, UNION, TRAIT, TYPE, CONST, STATIC, MACRO, FIELD, METHOD,

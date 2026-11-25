@@ -1,18 +1,28 @@
-/** The named items that a file declares at its top level, for the rules about items. */
+/** The named items that a file declares at its top level, and their members, for the rules about items. */
 import { SyntaxKind } from "./compiler.ts";
 import type { Node, SourceFile } from "./compiler.ts";
 
-/** A kind of item: `function`, `class`, `interface`, `type`, `enum`, `variable` or `namespace`. */
-export type ItemKind = "function" | "class" | "interface" | "type" | "enum" | "variable" | "namespace" | "package";
+/**
+ * A kind of item: `function`, `class`, `interface`, `type`, `enum`, `variable` or
+ * `namespace`, and for a member of a class or of an interface `field` or `method`.
+ */
+export type ItemKind = "function" | "class" | "interface" | "type" | "enum" | "variable" | "namespace" | "field" | "method" | "package";
+
+/** The kinds of the members of items. A rule selects them only when it names them. */
+export const MEMBER_KINDS: readonly ItemKind[] = ["field", "method"];
 
 /** The kinds of item a declaration can have. */
-export const ITEM_KINDS: readonly ItemKind[] = ["function", "class", "interface", "type", "enum", "variable", "namespace"];
+export const ITEM_KINDS: readonly ItemKind[] = ["function", "class", "interface", "type", "enum", "variable", "namespace", ...MEMBER_KINDS];
 
-/** `exported`: the module exports the item, also under another name. `local`: it does not. */
-export type Visibility = "exported" | "local";
+/**
+ * For an item of a file, `exported`: the module exports the item, also under another name,
+ * and `local`: it does not. For a member, `public`, `protected` or `private`, where a name
+ * that starts with `#` is `private`.
+ */
+export type Visibility = "exported" | "local" | "public" | "protected" | "private";
 
 /** The visibilities a declaration can have. */
-export const VISIBILITIES: readonly Visibility[] = ["exported", "local"];
+export const VISIBILITIES: readonly Visibility[] = ["exported", "local", "public", "protected", "private"];
 
 /**
  * The relations that the syntax of a declaration gives: `extends` and `implements` of a class
@@ -45,10 +55,12 @@ export interface Tie {
   readonly from?: { readonly specifier: Node; readonly name: string };
 }
 
-/** A top-level declaration of a file, before its names are resolved. */
+/** A top-level declaration of a file or one of its members, before its names are resolved. */
 export interface Declared {
   readonly name: string;
   readonly kind: ItemKind;
+  /** For a member: the name of the class or the interface that has it, and its visibility. */
+  readonly member?: { readonly owner: string; readonly visibility: Visibility };
   /** The node of the name, or of the declaration when it has no name. */
   readonly at: Node;
   /** The node of the whole declaration: the item ends where it ends. */
@@ -78,6 +90,8 @@ interface Loose extends Node {
   readonly initializer?: Loose;
   readonly exprName?: Loose;
   readonly qualifier?: Loose;
+  readonly members?: readonly Loose[];
+  readonly body?: Loose;
 }
 
 const K = SyntaxKind;
@@ -89,6 +103,17 @@ const KINDS: ReadonlyMap<number, ItemKind> = new Map<number, ItemKind>([
   [K.TypeAliasDeclaration, "type"],
   [K.EnumDeclaration, "enum"],
   [K.ModuleDeclaration, "namespace"],
+]);
+
+/** The members of a class or of an interface that are items, each with its kind. */
+const MEMBERS: ReadonlyMap<number, ItemKind> = new Map<number, ItemKind>([
+  [K.PropertyDeclaration, "field"],
+  [K.PropertySignature, "field"],
+  [K.MethodDeclaration, "method"],
+  [K.MethodSignature, "method"],
+  [K.Constructor, "method"],
+  [K.GetAccessor, "method"],
+  [K.SetAccessor, "method"],
 ]);
 
 function identifier(node: Loose | undefined): string | undefined {
@@ -142,6 +167,14 @@ function signatureTies(signature: Loose, ties: Tie[]): void {
   ties.push(...names.map((node) => ({ relation: "returns" as const, node })));
 }
 
+/** The keywords that make a parameter of a constructor a field of the class. */
+const PROPERTY_KEYWORDS: ReadonlySet<number> = new Set([K.PublicKeyword, K.PrivateKeyword, K.ProtectedKeyword, K.ReadonlyKeyword]);
+
+/** The text of a name that is no identifier: a string, or a private name with its `#`. */
+function textOf(node: Loose): string | undefined {
+  return node.text ?? node.escapedText;
+}
+
 const KEYWORDS: ReadonlyMap<number, Modifier> = new Map<number, Modifier>([
   [K.AsyncKeyword, "async"],
   [K.AbstractKeyword, "abstract"],
@@ -170,7 +203,77 @@ function modifiersOf(statement: Loose, sourceFile: SourceFile, more: readonly Mo
   return MODIFIERS.filter((modifier) => found.has(modifier));
 }
 
-/** The top-level declarations of a file, in the order of the text. */
+/** The decorators among the modifiers of a node, as ties. */
+function decoratorTies(node: Loose, ties: Tie[]): void {
+  for (const modifier of node.modifiers ?? []) {
+    const target = modifier.kind === K.Decorator ? named(modifier.expression) : undefined;
+    if (target !== undefined) {
+      ties.push({ relation: "decorator", node: target });
+    }
+  }
+}
+
+/** The ties of the written type of a field or of a variable. */
+function typeTies(type: Loose | undefined, ties: Tie[]): void {
+  const names: Node[] = [];
+  typeNames(type, names);
+  ties.push(...names.map((node) => ({ relation: "has-type" as const, node })));
+}
+
+/** `private` and `protected` as the modifiers of a member or of a parameter say them, and `public` otherwise. */
+function memberVisibility(node: Loose): Visibility {
+  const has = (kind: number): boolean => (node.modifiers ?? []).some((modifier) => modifier.kind === kind);
+  return has(K.PrivateKeyword) || node.name?.kind === K.PrivateIdentifier ? "private" : has(K.ProtectedKeyword) ? "protected" : "public";
+}
+
+/**
+ * The fields and the methods of a class or of an interface with the name `owner`, in the
+ * order of the text.
+ *
+ * - A property is a field, and so is a parameter of the constructor that declares one:
+ *   `constructor(private readonly db: Db)`.
+ * - A method, an accessor and the constructor, with the name `constructor`, are methods.
+ *   The signatures of an overloaded method are one method: the one with the body.
+ * - A member whose name the code computes, `[key]`, is no item.
+ */
+function collectMembers(owner: string, type: Loose, sourceFile: SourceFile, found: Declared[]): void {
+  const places = new Map<string, number>();
+  const add = (member: Loose, kind: ItemKind, name: string, at: Node, ties: Tie[]): void => {
+    const item: Declared = { name, kind, at, whole: member, exported: false, ties, modifiers: modifiersOf(member, sourceFile, []), member: { owner, visibility: memberVisibility(member) } };
+    const known = places.get(`${kind} ${name}`);
+    if (known === undefined) {
+      places.set(`${kind} ${name}`, found.push(item) - 1);
+    } else if (member.body !== undefined) {
+      found[known] = item;
+    }
+  };
+  for (const member of type.members ?? []) {
+    const kind = MEMBERS.get(member.kind);
+    const name = member.kind === K.Constructor ? "constructor" : member.name?.kind === K.StringLiteral || member.name?.kind === K.PrivateIdentifier ? textOf(member.name) : identifier(member.name);
+    if (kind === undefined || name === undefined) {
+      continue;
+    }
+    const ties: Tie[] = [];
+    decoratorTies(member, ties);
+    if (kind === "field") {
+      typeTies(member.type, ties);
+    } else {
+      signatureTies(member, ties);
+    }
+    add(member, kind, name, member.name ?? member, ties);
+    for (const parameter of member.kind === K.Constructor ? (member.parameters ?? []) : []) {
+      const declares = (parameter.modifiers ?? []).some((modifier) => PROPERTY_KEYWORDS.has(modifier.kind));
+      const field = identifier(parameter.name);
+      if (declares && field !== undefined && parameter.name !== undefined) {
+        const ties: Tie[] = [];
+        typeTies(parameter.type, ties);
+        add(parameter, "field", field, parameter.name, ties);
+      }
+    }
+  }
+}
+
+/** The top-level declarations of a file, each class and interface before its members, in the order of the text. */
 export function collectDeclarations(sourceFile: SourceFile): Declared[] {
   const found: Declared[] = [];
   sourceFile.forEachChild((child) => {
@@ -182,9 +285,7 @@ export function collectDeclarations(sourceFile: SourceFile): Declared[] {
         const name = identifier(declaration.name);
         if (name !== undefined && declaration.name !== undefined) {
           const ties: Tie[] = [];
-          const names: Node[] = [];
-          typeNames(declaration.type, names);
-          ties.push(...names.map((node) => ({ relation: "has-type" as const, node })));
+          typeTies(declaration.type, ties);
           // `const make = (order: Order): Total => ..` takes and returns as a function does.
           const value = declaration.initializer;
           const more: Modifier[] = [];
@@ -213,12 +314,7 @@ export function collectDeclarations(sourceFile: SourceFile): Declared[] {
       return;
     }
     const ties: Tie[] = [];
-    for (const modifier of modifiers) {
-      const target = modifier.kind === K.Decorator ? named(modifier.expression) : undefined;
-      if (target !== undefined) {
-        ties.push({ relation: "decorator", node: target });
-      }
-    }
+    decoratorTies(node, ties);
     for (const clause of node.heritageClauses ?? []) {
       const relation = clause.token === K.ImplementsKeyword ? "implements" : clause.token === K.ExtendsKeyword ? "extends" : undefined;
       for (const type of clause.types ?? []) {
@@ -235,6 +331,9 @@ export function collectDeclarations(sourceFile: SourceFile): Declared[] {
       signatureTies(node, ties);
     }
     found.push({ name: name ?? "default", kind, at: node.name ?? node, whole: node, exported, ties, modifiers: modifiersOf(node, sourceFile, []) });
+    if (kind === "class" || kind === "interface") {
+      collectMembers(name ?? "default", node, sourceFile, found);
+    }
   });
   return found;
 }

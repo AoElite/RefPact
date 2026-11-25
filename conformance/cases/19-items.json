@@ -3,10 +3,11 @@
   "separator": "::",
   "facts": {
     "units": ["crate", "crate::api", "crate::domain", "crate::internal", "crate::storage"],
-    "items": ["crate::domain::Repository", "crate::storage::PgRepository", "crate::api::MemRepository", "crate::storage::Cache", "crate::internal::Helper", "crate::internal::helper", "crate::api::Dto", "crate::internal::test_helper"],
+    "items": ["crate::domain::Repository", "crate::storage::PgRepository", "crate::api::MemRepository", "crate::storage::Cache", "crate::internal::Helper", "crate::internal::helper", "crate::api::Dto", "crate::internal::test_helper", "crate::api::Dto::id"],
     "kinds": ["use"],
     "tags": ["test"],
-    "item_kinds": ["struct", "enum", "trait", "fn"],
+    "item_kinds": ["struct", "enum", "trait", "fn", "field"],
+    "member_kinds": ["field"],
     "visibilities": ["pub", "pub(crate)", "private"],
     "relations": ["implements", "derives"],
     "facts": [
@@ -20,7 +21,8 @@
       {"path": "crate::internal::Helper", "name": "Helper", "unit": "crate::internal", "file": "src/internal.rs", "line": 1, "kind": "struct", "visibility": "pub", "relations": [{"relation": "derives", "target": "serde::Serialize"}]},
       {"path": "crate::internal::helper", "name": "helper", "unit": "crate::internal", "file": "src/internal.rs", "line": 4, "kind": "fn", "visibility": "private"},
       {"path": "crate::api::Dto", "name": "Dto", "unit": "crate::api", "file": "src/api.rs", "line": 6, "kind": "struct", "visibility": "pub", "relations": [{"relation": "derives", "target": "serde::Serialize"}, {"relation": "derives", "target": "std::fmt::Debug"}]},
-      {"path": "crate::internal::test_helper", "name": "test_helper", "unit": "crate::internal", "file": "src/internal.rs", "line": 9, "kind": "fn", "visibility": "pub", "tags": ["test"]}
+      {"path": "crate::internal::test_helper", "name": "test_helper", "unit": "crate::internal", "file": "src/internal.rs", "line": 9, "kind": "fn", "visibility": "pub", "tags": ["test"]},
+      {"path": "crate::api::Dto::id", "name": "id", "unit": "crate::api", "file": "src/api.rs", "line": 7, "kind": "field", "visibility": "pub"}
     ]
   },
   "cases": [
@@ -35,6 +37,8 @@
     {"name": "names select items", "rule": {"name": "r", "subjects": {"all": true}, "items": {"named": ["*Repository", "Dto"], "kinds": ["struct"], "must": {"reside_in": ["crate::storage"]}}}, "expect": {"violations": [{"item": "crate::api::MemRepository"}, {"item": "crate::api::Dto"}]}},
     {"name": "several related entries must all hold", "rule": {"name": "r", "subjects": {"all": true}, "items": {"related": [{"relation": "implements", "any_of": ["crate::domain::Repository"]}, {"relation": "derives", "any_of": ["std::fmt::Debug"]}], "must": {"reside_in": ["crate::api"]}}}, "expect": {"violations": [{"item": "crate::storage::PgRepository"}]}},
     {"name": "a relation counts only with its own kind", "rule": {"name": "r", "subjects": {"all": true}, "items": {"related": [{"relation": "implements", "any_of": ["crate::domain::Repository"]}], "must": {"have": {"relation": "derives", "any_of": ["crate::domain::Repository"]}}}}, "expect": {"violations": [{"item": "crate::storage::PgRepository"}, {"item": "crate::api::MemRepository"}, {"item": "crate::storage::Cache"}]}},
+    {"name": "a member is not selected when no kind is named", "rule": {"name": "r", "subjects": {"any_of": ["crate::api"]}, "items": {"visibilities": ["pub"], "must": "not_exist"}}, "expect": {"violations": [{"item": "crate::api::MemRepository"}, {"item": "crate::api::Dto"}]}},
+    {"name": "a member is selected when its kind is named", "rule": {"name": "r", "subjects": {"any_of": ["crate::api"]}, "items": {"kinds": ["struct", "field"], "visibilities": ["pub"], "must": "not_exist"}}, "expect": {"violations": [{"item": "crate::api::MemRepository"}, {"item": "crate::api::Dto"}, {"item": "crate::api::Dto::id", "item_kind": "field", "line": 7}]}},
     {"name": "a selection without items passes", "rule": {"name": "r", "subjects": {"all": true}, "items": {"named": ["Pg*"], "must": {"reside_in": ["crate::storage"]}}}, "expect": {"violations": []}},
     {"name": "a baseline accepts an item", "rule": {"name": "r", "subjects": {"all": true}, "items": {"related": [{"relation": "implements", "any_of": ["crate::domain::Repository"]}], "must": {"reside_in": ["crate::storage::**"]}}}, "expect": {"violations": []}, "baseline": "r\tcrate::api\titem crate::api::MemRepository\t1\n"},
     {"name": "names that are empty, invalid or match nothing are errors", "rule": {"name": "r", "subjects": {"all": true}, "items": {"named": [], "must": "not_exist"}}, "expect": {"errors": [{"code": "empty-list", "role": "name"}]}},

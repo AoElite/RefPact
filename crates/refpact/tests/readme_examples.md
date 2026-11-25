@@ -725,6 +725,20 @@ docs/rust.md, example 31:
 # #![allow(unused, dead_code)]
 # use refpact::*;
 # let app = Crate::load(env!("CARGO_MANIFEST_DIR")).unwrap();
+let app = Crate::load(env!("CARGO_MANIFEST_DIR")).unwrap();
+
+rule("the command line does not use the database")
+    .modules(any_of(["crate::cli::**"]))        // `mod cli;` in src/main.rs
+    .must_not_use(any_of(["crate::db"]))        // `pub mod db;` in src/lib.rs
+    .check(&app);
+```
+
+docs/rust.md, example 32:
+
+```no_run
+# #![allow(unused, dead_code)]
+# use refpact::*;
+# let app = Crate::load(env!("CARGO_MANIFEST_DIR")).unwrap();
 let shop = Workspace::options(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
     .reading_dependencies()
     .load()
@@ -737,7 +751,7 @@ rule("the domain is built without a database")
     .check(&shop);
 ```
 
-docs/rust.md, example 32:
+docs/rust.md, example 33:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -772,7 +786,7 @@ rule("every package has a licence that we accept")
     .check(&shop);
 ```
 
-docs/rust.md, example 33:
+docs/rust.md, example 34:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -813,7 +827,7 @@ rule("a build has one version of each package")
     .check(&shop);
 ```
 
-docs/rust.md, example 34:
+docs/rust.md, example 35:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -827,7 +841,7 @@ rule("the domain does not use storage")
     .check_with_baseline(&app, &baseline);
 ```
 
-docs/rust.md, example 35:
+docs/rust.md, example 36:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -840,7 +854,7 @@ rule("files are opened in the platform layer only")
     .check(&app);
 ```
 
-docs/rust.md, example 36:
+docs/rust.md, example 37:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -857,7 +871,7 @@ rule("the model reads no file")
     .check(&app);
 ```
 
-docs/rust.md, example 37:
+docs/rust.md, example 38:
 
 ```no_run
 # #![allow(unused, dead_code)]
@@ -870,7 +884,7 @@ rule("only the Windows code opens files")
     .check(&app);
 ```
 
-docs/rust.md, example 38:
+docs/rust.md, example 39:
 
 ```no_run
 # #![allow(unused, dead_code)]

@@ -32,6 +32,8 @@ impl ItemCheck for Demand {
 struct Filter<'c> {
     named: Option<Vec<Pattern>>,
     kinds: Option<&'c [String]>,
+    /// The kinds of members, which the filter selects only when `kinds` names them.
+    members: Vec<String>,
     visibilities: Option<&'c [String]>,
     related: Vec<(&'c str, Vec<Pattern>)>,
     modifiers: Option<&'c [String]>,
@@ -47,6 +49,7 @@ impl Filter<'_> {
         }) && self
             .kinds
             .map_or(true, |kinds| kinds.contains(&declaration.kind))
+            && (self.kinds.is_some() || !self.members.contains(&declaration.kind))
             && self.visibilities.map_or(true, |visibilities| {
                 visibilities.contains(&declaration.visibility)
             })
@@ -122,6 +125,7 @@ pub(crate) fn prepare_with<'c>(
     let filter = Filter {
         named,
         kinds,
+        members: setup.facts().member_kinds.clone(),
         visibilities,
         related,
         modifiers,
