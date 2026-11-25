@@ -233,7 +233,8 @@ function memberVisibility(node: Loose): Visibility {
  * - A property is a field, and so is a parameter of the constructor that declares one:
  *   `constructor(private readonly db: Db)`.
  * - A method, an accessor and the constructor, with the name `constructor`, are methods.
- *   The signatures of an overloaded method are one method: the one with the body.
+ *   The signatures of an overloaded method are one method: the one with the body. A getter
+ *   and a setter of one name are two methods at one path, each with its own code.
  * - A member whose name the code computes, `[key]`, is no item.
  */
 function collectMembers(owner: string, type: Loose, sourceFile: SourceFile, found: Declared[]): void {
@@ -243,8 +244,11 @@ function collectMembers(owner: string, type: Loose, sourceFile: SourceFile, foun
     const known = places.get(`${kind} ${name}`);
     if (known === undefined) {
       places.set(`${kind} ${name}`, found.push(item) - 1);
-    } else if (member.body !== undefined) {
+    } else if ((found[known]?.whole as Loose).body === undefined) {
+      // The declaration before was a signature of an overloaded method: this one has its place.
       found[known] = item;
+    } else {
+      places.set(`${kind} ${name}`, found.push(item) - 1);
     }
   };
   for (const member of type.members ?? []) {

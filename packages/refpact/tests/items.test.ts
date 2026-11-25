@@ -47,6 +47,9 @@ const files: Record<string, string[]> = {
     "  return pool;",
     "}",
     "export interface Saved { readonly id: string; readonly port: Repository; save(order: Order): void }",
+    'import * as repository from "../db/repository";',
+    "export function pass(): unknown { return [repository, repository.size]; }",
+    "export class Box { get value(): number { return pool; } set value(next: number) {} }",
   ],
   "src/log.ts": ["export function log(target: unknown): void {}", "export type Level = string;", "export enum Color { Red }", "namespace Space {}"],
 };
@@ -97,6 +100,10 @@ it("the declarations of a project", () => {
     "src/api/handler.ts#Saved#id field public 22:35 []",
     "src/api/handler.ts#Saved#port field public 22:56 [has-type src/domain/port.ts#Repository]",
     "src/api/handler.ts#Saved#save method public 22:74 [takes src/domain/order.ts#Order]",
+    "src/api/handler.ts#pass function exported 24:17 []",
+    "src/api/handler.ts#Box class exported 25:14 []",
+    "src/api/handler.ts#Box#value method public 25:24 []",
+    "src/api/handler.ts#Box#value method public 25:61 []",
     "src/db/repository.ts#SqlRepository class exported 5:14 [assignable-to node:events#EventEmitter, assignable-to src/domain/port.ts#Repository, decorator src/log.ts#log, extends node:events#EventEmitter, implements src/domain/port.ts#Repository]",
     "src/db/repository.ts#Cache class exported 6:14 [assignable-to src/domain/port.ts#Repository, implements src/domain/port.ts#Repository]",
     "src/db/repository.ts#open function local 7:10 []",
@@ -125,6 +132,7 @@ it("items that implement or extend", () => {
   expect(items(rule("emitters").items(all()).extending(anyOf(pkg("node:events"))).mustNotExist())).toEqual(["src/db/repository.ts#SqlRepository"]);
   expect(items(rule("decorated").items(all()).ofKind("class").mustBeDecoratedWith(anyOf("src/log.ts#log")))).toEqual([
     "src/api/handler.ts#Handler",
+    "src/api/handler.ts#Box",
     "src/db/repository.ts#Cache",
     "src/domain/order.ts#Entity",
     "src/domain/order.ts#Order",
@@ -152,7 +160,7 @@ it("visibility and errors", () => {
 
 it("the fields and the methods of classes and interfaces are items", () => {
   // A selection holds the members only when it names their kinds.
-  expect(items(rule("nothing in the api").items(anyOf("src/api/**")).mustNotExist())).toEqual(["src/api/handler.ts#Handler", "src/api/handler.ts#open", "src/api/handler.ts#Saved"]);
+  expect(items(rule("nothing in the api").items(anyOf("src/api/**")).mustNotExist())).toEqual(["src/api/handler.ts#Handler", "src/api/handler.ts#open", "src/api/handler.ts#Saved", "src/api/handler.ts#pass", "src/api/handler.ts#Box"]);
   const members = () => rule("members").items(anyOf("src/api/**")).ofKind("field", "method");
   expect(items(members().mustNotExist())).toEqual([
     "src/api/handler.ts#Handler#limit",
@@ -166,6 +174,8 @@ it("the fields and the methods of classes and interfaces are items", () => {
     "src/api/handler.ts#Saved#id",
     "src/api/handler.ts#Saved#port",
     "src/api/handler.ts#Saved#save",
+    "src/api/handler.ts#Box#value",
+    "src/api/handler.ts#Box#value",
   ]);
   expect(items(members().withVisibility("private", "protected").mustNotExist())).toEqual(["src/api/handler.ts#Handler#limit", "src/api/handler.ts#Handler##seen", "src/api/handler.ts#Handler#store"]);
   expect(items(members().taking(anyOf("src/domain/order.ts#Order")).mustNotExist())).toEqual(["src/api/handler.ts#Handler#handle", "src/api/handler.ts#Saved#save"]);
@@ -179,15 +189,29 @@ it("the fields and the methods of classes and interfaces are items", () => {
 it("what the code of an item imports", () => {
   const handlers = () => rule("the handlers do not use the database").items(anyOf("src/api/**"));
   expect(imports(handlers().named("Handler").mustNotImport(anyOf("src/db/**")))).toEqual(["src/api/handler.ts:10:12 in src/api/handler.ts#Handler#handle"]);
-  expect(imports(handlers().ofKind("method").mustOnlyImport(anyOf("src/domain/order.ts")))).toEqual(["src/api/handler.ts:10:12 in src/api/handler.ts#Handler#handle"]);
+  expect(imports(handlers().ofKind("method").mustOnlyImport(anyOf("src/domain/order.ts")))).toEqual([
+    "src/api/handler.ts:10:12 in src/api/handler.ts#Handler#handle",
+    "src/api/handler.ts:25:49 in src/api/handler.ts#Box#value",
+  ]);
   // A variable with the name of an import is no use of the import.
   expect(imports(handlers().named("open").mustNotImport(anyOf("src/db/**")))).toEqual([]);
+  // The name of a namespace import as a value is a use of the module, and its member is a use of the member.
+  expect(imports(handlers().named("pass").mustNotImport(anyOf("src/db/**")))).toEqual([
+    "src/api/handler.ts:24:43 in src/api/handler.ts#pass",
+    "src/api/handler.ts:24:66 in src/api/handler.ts#pass",
+  ]);
+  // A getter and a setter of one name are two methods, each with its own code.
+  expect(imports(handlers().ofKind("method").named("value").mustNotImport(anyOf("src/db/**")))).toEqual(["src/api/handler.ts:25:49 in src/api/handler.ts#Box#value"]);
   // A rule about files reports the import and each use of its name.
   expect(imports(rule("the api does not import the database").files(anyOf("src/api/**")).mustNotImport(anyOf("src/db/**")))).toEqual([
     "src/api/handler.ts:2:10",
     "src/api/handler.ts:10:12",
+    "src/api/handler.ts:23:13",
+    "src/api/handler.ts:24:43",
+    "src/api/handler.ts:24:66",
+    "src/api/handler.ts:25:49",
   ]);
-  expect(imports(rule("the api does not import the database").files(anyOf("src/api/**")).mustNotImport(anyOf("src/db/**")), shop)).toEqual(["src/api/handler.ts:2:10"]);
+  expect(imports(rule("the api does not import the database").files(anyOf("src/api/**")).mustNotImport(anyOf("src/db/**")), shop)).toEqual(["src/api/handler.ts:2:10", "src/api/handler.ts:23:13", "src/api/handler.ts:24:66"]);
   // Without the option, no reference says which item it is in: the rule cannot fail.
   const unread = handlers().mustNotImport(anyOf("src/db/**")).evaluate(shop);
   expect(!unread.ok && unread.errors.map((error) => error.code)).toEqual(["no-subjects"]);

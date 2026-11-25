@@ -632,12 +632,16 @@ export interface NameSite {
  * The places where a file writes a name that one of its imports binds, outside the import
  * and export declarations, in the order of the text: `query` in `query(sql)` after
  * `import { query } from "./db"`. A name after a dot and the name of a member are left out.
+ * The name of a namespace import is such a place where the code uses the module as a value,
+ * `consume(db)`. In `db.query`, the member is the use, which {@link collectMemberUses} gives.
  * Only the compiler can tell whether a place is a use of the import or of another variable
  * with its name. Every node of the file is visited.
  */
 export function collectNameSites(sourceFile: SourceFile, uses: readonly ModuleUse[]): NameSite[] {
   const bound = uses.flatMap((use) => use.names.filter((name) => !name.kind.startsWith("export")));
   const names = new Set(bound.map((name) => textOf(name.node as Loose)));
+  const namespaces = new Set(uses.flatMap((use) => (use.namespace !== undefined ? [use.namespace.local] : [])));
+  namespaces.forEach((name) => names.add(name));
   const sites: NameSite[] = [];
   if (names.size === 0) {
     return sites;
@@ -647,7 +651,9 @@ export function collectNameSites(sourceFile: SourceFile, uses: readonly ModuleUs
       return;
     }
     const tag = parent.kind === K.JsxOpeningElement || parent.kind === K.JsxSelfClosingElement || parent.kind === K.JsxClosingElement;
-    if (node.kind === K.Identifier && names.has(textOf(node)) && ((tag && parent.tagName === node) || isValueName(node, parent))) {
+    const ofMember = (parent.kind === K.PropertyAccessExpression && parent.expression === node) || (parent.kind === K.QualifiedName && parent.left === node);
+    const taken = node.kind === K.Identifier && names.has(textOf(node)) && !(ofMember && namespaces.has(textOf(node)));
+    if (taken && ((tag && parent.tagName === node) || isValueName(node, parent))) {
       sites.push({ node, ...(parent.kind === K.ShorthandPropertyAssignment && { shorthand: parent }) });
     }
     node.forEachChild((child) => visit(child as Loose, node));
