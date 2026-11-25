@@ -653,6 +653,11 @@ function factsOfFile(
     if (module.note === NOT_RESOLVED && computed === undefined && use.asset !== true) {
       mark(use.specifierNode, "unresolved-import", use.specifier);
     }
+    const bound = use.namespace === undefined ? undefined : symbol(indexes.namespace);
+    if (use.namespace !== undefined && bound !== undefined) {
+      // A use of the name of a namespace import as a value is a use of the module.
+      imported.push({ symbol: bound, paths: [module.base, ...(module.fileBase !== undefined ? [module.fileBase] : [])], kind: use.namespace.kind, note: module.note });
+    }
     if (use.whole) {
       const note = computed === "constant" && module.note === NOT_RESOLVED ? undefined : module.note;
       add(use.at, use.kind, module.base, module.fileBase !== undefined ? [module.fileBase] : [], note);

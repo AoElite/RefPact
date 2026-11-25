@@ -374,7 +374,7 @@ rule("no method takes a request").items(anyOf("src/domain/**")).ofKind("method")
 - A property is a field, and so is a parameter of the constructor that declares one:
   `constructor(private readonly db: Db)`. A method, an accessor and the constructor, with
   the name `constructor`, are methods. The signatures of an overloaded method are one
-  method.
+  method. A getter and a setter of one name are two methods at one path.
 - The visibility is `private`, `protected` or `public`. A name that starts with `#` is
   `private`, and a member of an interface is `public`.
 - `ofType` sees the written type of a field, `taking` and `returning` the signature of a
@@ -402,6 +402,8 @@ rule("the handlers do not use the database")
   `import` statement, at the place of the use: `query(sql)` after `import { query } from
   "./db"` is an import of `src/db.ts#query`. Every reference then says which item of the
   file it is in.
+- The name of a namespace import as a value, `consume(db)` after `import * as db from
+  "./db"`, is an import of the module. In `db.query`, the member is the import.
 - The code of an item is its signature and its body. The code of a class is also the code
   of its members, and a rule can select one method with `ofKind("method")`.
 - A variable that has the name of an import is no use of the import. The compiler says
