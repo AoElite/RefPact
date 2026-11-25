@@ -144,6 +144,11 @@ impl Eq for Custom {}
 impl std::panic::UnwindSafe for Custom {}
 impl std::panic::RefUnwindSafe for Custom {}
 
+/// The numbers of the units that a rule selects, in order.
+fn selected_units(selected: &[bool]) -> impl Iterator<Item = usize> + '_ {
+    (0..selected.len()).filter(move |&unit| selected[unit])
+}
+
 /// What [`Check::prepare`] gets: the fact set, the subjects, and the errors of the rule so far.
 pub struct Setup<'a> {
     facts: &'a FactSet,
@@ -177,8 +182,7 @@ impl<'a> Setup<'a> {
 
     /// The numbers of the units that the rule selects, in order.
     pub fn subjects(&self) -> impl Iterator<Item = usize> + 'a {
-        let selected = self.selected;
-        (0..selected.len()).filter(move |&unit| selected[unit])
+        selected_units(self.selected)
     }
 
     /// Whether the rule has errors so far. A check that cannot fail when the rest of the rule
@@ -461,8 +465,7 @@ impl<'a> Scope<'a> {
 
     /// The numbers of the units that the rule selects, in order.
     pub fn subjects(&self) -> impl Iterator<Item = usize> + 'a {
-        let selected = self.selected;
-        (0..selected.len()).filter(move |&unit| selected[unit])
+        selected_units(self.selected)
     }
 
     /// The number of the unit with this path.

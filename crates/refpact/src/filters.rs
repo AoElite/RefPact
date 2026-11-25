@@ -6,6 +6,33 @@
 
 use crate::core::{Candidates, Exemption, KindFilter, Severity};
 
+/// The kinds that a rule with the filter `known` counts when it also counts only `kinds`.
+/// Each filter of a rule holds: a later one does not take the place of an earlier one.
+fn only(known: &KindFilter, kinds: Vec<String>) -> KindFilter {
+    let mut kinds = kinds;
+    match known {
+        KindFilter::All => {}
+        KindFilter::Only(counted) => kinds.retain(|kind| counted.contains(kind)),
+        KindFilter::Except(ignored) => kinds.retain(|kind| !ignored.contains(kind)),
+    }
+    KindFilter::Only(kinds)
+}
+
+/// The kinds that a rule with the filter `known` counts when it also leaves out `kinds`.
+fn except(known: &KindFilter, kinds: Vec<String>) -> KindFilter {
+    match known {
+        KindFilter::All => KindFilter::Except(kinds),
+        KindFilter::Only(counted) => {
+            let left = counted.iter().filter(|kind| !kinds.contains(kind));
+            KindFilter::Only(left.cloned().collect())
+        }
+        KindFilter::Except(ignored) => {
+            let more = kinds.into_iter().filter(|kind| !ignored.contains(kind));
+            KindFilter::Except(ignored.iter().cloned().chain(more).collect())
+        }
+    }
+}
+
 /// One filter, as a value that a set of rules keeps until its rules are made.
 #[derive(Debug, Clone)]
 pub(crate) enum Filter {
@@ -33,8 +60,8 @@ impl Filter {
             Filter::Warning => rule.severity = Severity::Warning,
             Filter::IgnoreTag(tag) => rule.ignore_tags.push(tag),
             Filter::IgnoreCandidates => rule.candidates = Candidates::Ignore,
-            Filter::OnlyKinds(kinds) => rule.kinds = KindFilter::Only(kinds),
-            Filter::IgnoreKinds(kinds) => rule.kinds = KindFilter::Except(kinds),
+            Filter::OnlyKinds(kinds) => rule.kinds = only(&rule.kinds, kinds),
+            Filter::IgnoreKinds(kinds) => rule.kinds = except(&rule.kinds, kinds),
             Filter::Exempt(exemption) => rule.exemptions.push(exemption),
         }
     }
@@ -122,14 +149,16 @@ macro_rules! filter_methods {
                 crate::filters::Filtered::filter(self, filter)
             }
 
-            /// Counts only these kinds of reference.
+            /// Counts only these kinds of reference. With another filter of kinds, both
+            /// hold: `only_kinds` twice counts the kinds that both name.
             pub fn only_kinds(self, kinds: impl IntoIterator<Item = crate::Kind>) -> $type {
                 let kinds = kinds.into_iter().map(|kind| kind.as_str().to_owned());
                 let filter = crate::filters::Filter::OnlyKinds(kinds.collect());
                 crate::filters::Filtered::filter(self, filter)
             }
 
-            /// Counts all kinds of reference except these.
+            /// Counts all kinds of reference except these, also with another filter of
+            /// kinds: `ignoring_kinds` twice leaves out the kinds of both.
             pub fn ignoring_kinds(self, kinds: impl IntoIterator<Item = crate::Kind>) -> $type {
                 let kinds = kinds.into_iter().map(|kind| kind.as_str().to_owned());
                 let filter = crate::filters::Filter::IgnoreKinds(kinds.collect());

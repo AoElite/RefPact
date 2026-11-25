@@ -312,8 +312,8 @@ impl<'t> Reader<'t> {
     fn value(&mut self) -> Result<Value<'t>, String> {
         match self.peek() {
             None => Err(self.error("the text ends")),
-            Some(b'{') => self.nested(Reader::object),
-            Some(b'[') => self.nested(Reader::array),
+            Some(b'{') => self.object(),
+            Some(b'[') => self.array(),
             Some(b'"') => self.string().map(Value::String),
             Some(b't') => self.literal("true", Value::Bool(true)),
             Some(b'f') => self.literal("false", Value::Bool(false)),
@@ -323,62 +323,22 @@ impl<'t> Reader<'t> {
         }
     }
 
-    fn nested(
-        &mut self,
-        read: fn(&mut Self) -> Result<Value<'t>, String>,
-    ) -> Result<Value<'t>, String> {
-        self.depth += 1;
-        if self.depth > MAX_DEPTH {
-            return Err(self.error("the values nest too deep"));
-        }
-        let value = read(self);
-        self.depth -= 1;
-        value
-    }
-
     fn object(&mut self) -> Result<Value<'t>, String> {
-        self.expect(b'{')?;
         let mut fields = Vec::new();
-        if self.peek() == Some(b'}') {
-            self.position += 1;
-            return Ok(Value::Object(fields));
-        }
-        loop {
-            if self.peek() != Some(b'"') {
-                return Err(self.error("expected a key"));
-            }
-            let key = self.string()?;
-            self.expect(b':')?;
-            fields.push((key, self.value()?));
-            match self.peek() {
-                Some(b',') => self.position += 1,
-                Some(b'}') => {
-                    self.position += 1;
-                    return Ok(Value::Object(fields));
-                }
-                _ => return Err(self.error("expected `,` or `}`")),
-            }
-        }
+        self.fields(|reader, key| {
+            fields.push((key, reader.value()?));
+            Ok(())
+        })?;
+        Ok(Value::Object(fields))
     }
 
     fn array(&mut self) -> Result<Value<'t>, String> {
-        self.expect(b'[')?;
         let mut items = Vec::new();
-        if self.peek() == Some(b']') {
-            self.position += 1;
-            return Ok(Value::Array(items));
-        }
-        loop {
-            items.push(self.value()?);
-            match self.peek() {
-                Some(b',') => self.position += 1,
-                Some(b']') => {
-                    self.position += 1;
-                    return Ok(Value::Array(items));
-                }
-                _ => return Err(self.error("expected `,` or `]`")),
-            }
-        }
+        self.items(|reader, _| {
+            items.push(reader.value()?);
+            Ok(())
+        })?;
+        Ok(Value::Array(items))
     }
 
     fn string(&mut self) -> Result<Cow<'t, str>, String> {

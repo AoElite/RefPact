@@ -2,7 +2,7 @@
 import type { CustomConstraint, Demand, RawPattern, Related, Rule as CoreRule, Violation } from "./core/index.ts";
 import type { ItemScope, ListNames } from "./custom.ts";
 import type { ItemKind, Modifier, Visibility } from "./frontend/declarations.ts";
-import type { AnyOf, CheckPatterns, Files, Finder, ImportRule, Target } from "./rules.ts";
+import type { AnyOf, CheckPatterns, Files, Finder, ImportRule, Target, Targets } from "./rules.ts";
 
 export type { ItemKind, Modifier, Visibility };
 
@@ -13,6 +13,7 @@ export interface Maker {
   readonly subjects: (files: Files) => CoreRule["subjects"];
   readonly file: (pattern: string) => RawPattern;
   readonly target: (target: Target) => RawPattern;
+  readonly targets: (targets: AnyOf | Targets) => { anyOf: RawPattern[]; unverified: RawPattern[] };
 }
 
 interface Filters {
@@ -55,12 +56,19 @@ export class ItemSelection {
     return this.with({ named: [...(this.filters.named ?? []), ...globs] });
   }
 
-  /** Only items of these kinds. */
+  /**
+   * Only items of these kinds. Without this filter, a selection holds every kind except
+   * `field` and `method`: the members of the classes and the interfaces are selected only
+   * when this filter names them.
+   */
   ofKind(...kinds: ItemKind[]): ItemSelection {
     return this.with({ kinds: [...(this.filters.kinds ?? []), ...kinds] });
   }
 
-  /** Only items with one of these visibilities. */
+  /**
+   * Only items with one of these visibilities: `exported` or `local` for an item of a file,
+   * and `public`, `protected` or `private` for a member.
+   */
   withVisibility(...visibilities: Visibility[]): ItemSelection {
     return this.with({ visibilities: [...(this.filters.visibilities ?? []), ...visibilities] });
   }
@@ -168,6 +176,35 @@ export class ItemSelection {
    */
   mustHaveModifier(...modifiers: Modifier[]): ImportRule {
     return this.rule({ type: "have-modifier", modifiers });
+  }
+
+  /**
+   * The code of the items must not import any of the targets: the imported names that the
+   * code inside the selected items uses, in their signatures and their bodies, and for a
+   * class in its members. Unlike a rule about files, a target in the file of the item can
+   * break the rule.
+   *
+   * The project must be loaded with `resolveUses`, which says which item each use is in.
+   *
+   * ```ts
+   * rule("the handlers do not use the database")
+   *   .items(anyOf("src/api/**"))
+   *   .named("*Handler")
+   *   .mustNotImport(anyOf("src/db/**"))
+   *   .check(app);
+   * ```
+   */
+  mustNotImport(targets: AnyOf | Targets): ImportRule {
+    return this.rule({ type: "not-use", targets: this.maker.targets(targets) });
+  }
+
+  /**
+   * Every imported name that the code of the items uses must lead to one of the targets, or
+   * be declared in the file of the item. See {@link ItemSelection.mustNotImport} for what
+   * the code of an item is.
+   */
+  mustOnlyImport(targets: AnyOf | Targets): ImportRule {
+    return this.rule({ type: "only-use", targets: this.maker.targets(targets) });
   }
 
   /** Each item must have a decorator that is one of the targets. */

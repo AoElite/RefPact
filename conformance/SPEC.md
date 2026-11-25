@@ -56,6 +56,7 @@ FactSet {
   facts       ordered list of facts
   declarations   ordered list of declarations
   item_kinds     all item kinds this front end can produce
+  member_kinds   the item kinds of members, which a rule selects only by name; may be empty
   visibilities   all visibilities this front end can produce
   relations      all relations this front end can produce
   modifiers      all modifiers of declarations this front end can produce
@@ -386,7 +387,9 @@ A declaration is *selected* when all of these are true:
 1. Its unit is selected by the subjects.
 2. None of its tags is in `ignore_tags`.
 3. `named` is `none`, or a glob of `named` matches its name.
-4. `kinds` is `none`, or its kind is in `kinds`.
+4. `kinds` is `none` and its kind is not in the fact set's `member_kinds`, or its kind is
+   in `kinds`. A member, such as a field or a method of a type, is thus selected only by a
+   rule that names its kind.
 5. `visibilities` is `none`, or its visibility is in `visibilities`.
 6. For each entry of `related`, it has a relation whose `relation` is that of the entry and
    whose target a pattern of the entry's `any_of` matches within.
@@ -749,7 +752,7 @@ Each file in `cases/` is one object:
   segments, which is used as it is. Arrays allow segments that contain the separator, and
   allow invalid patterns to be written.
 - In `facts`, the keys `unit_lines`, `unit_files`, `items`, `kinds`, `markers`, `tags` default to `[]`.
-- In `facts`, `declarations`, `item_kinds`, `visibilities`, `relations`, `modifiers` and
+- In `facts`, `declarations`, `item_kinds`, `member_kinds`, `visibilities`, `relations`, `modifiers` and
   `properties` default to `[]`. A declaration is `{ "path", "name", "unit", "file", "line", "column",
   "end_line", "tags", "kind", "visibility", "relations", "modifiers" }`; `column` defaults to
   1, `tags`, `relations` and `modifiers` to `[]`, `end_line` may be absent, and a relation is
@@ -939,7 +942,7 @@ names the handle, so that a large fact set crosses the boundary once and not for
 
 - A `format` is `{ separator, attachedPrefixes, hiddenPrefixes }`: the path format of a fact
   set. The two lists may be absent.
-- In a fact set, `unitLines`, `unitFiles`, `declarations`, `itemKinds`, `visibilities`, `relations`,
+- In a fact set, `unitLines`, `unitFiles`, `declarations`, `itemKinds`, `memberKinds`, `visibilities`, `relations`,
   `modifiers`, `properties`, `attachedPrefixes` and `hiddenPrefixes` may be absent, and so may `tags`,
   `aliases` and `properties` (an object of texts by their names) of a fact and `tags`, `relations` and `modifiers` of a declaration. They are then empty. A `note` may be
   absent or `null`, and so may the `endLine` of a declaration.

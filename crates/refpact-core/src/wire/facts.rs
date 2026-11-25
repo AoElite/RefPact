@@ -92,6 +92,7 @@ pub(super) fn fact_set(reader: &mut Reader<'_>) -> Read<FactSet> {
                 set.declarations = at("declarations", optional_list(reader, declaration))?;
             }
             "itemKinds" => set.item_kinds = at("itemKinds", optional_strings(reader))?,
+            "memberKinds" => set.member_kinds = at("memberKinds", optional_strings(reader))?,
             "visibilities" => set.visibilities = at("visibilities", optional_strings(reader))?,
             "relations" => set.relations = at("relations", optional_strings(reader))?,
             "modifiers" => set.modifiers = at("modifiers", optional_strings(reader))?,

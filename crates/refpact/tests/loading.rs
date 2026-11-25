@@ -1,16 +1,9 @@
 //! Loading a crate: the module tree and the errors that stop an analysis.
 
-use refpact::{Crate, LoadError};
+use refpact::{Crate, LoadError, Workspace};
 
-/// Removes a temporary file or directory when the test ends, also when it fails.
-struct Removed(std::path::PathBuf);
-
-impl Drop for Removed {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+mod support;
+use support::Removed;
 
 fn modules(krate: &Crate) -> Vec<String> {
     krate.modules().collect()
@@ -200,6 +193,14 @@ fn load_errors() {
                 prefixes: vec!["src/old".to_owned()]
             }
         );
+
+        // With a manifest, the directory is also a workspace of one package. That package
+        // has no directory below the workspace for the error to name.
+        let manifest = "[package]\nname = \"alone\"\nversion = \"0.0.0\"\nedition = \"2021\"\n";
+        std::fs::write(dir.join("Cargo.toml"), manifest).unwrap();
+        let root = Workspace::load(&dir).unwrap_err().to_string();
+        let start = "in the crate at the root of the workspace: these files are not reached";
+        assert!(root.starts_with(start), "{root}");
     }
 }
 

@@ -62,7 +62,9 @@ is, how a path is written, and which kinds of reference exist. The core needs:
   rule is an error and not a rule that cannot fail.
 - **Declarations**, for rules about items: the named items of each unit, with their kind,
   their visibility, their relations, such as `implements` or `extends`, and their
-  modifiers, such as `async` or `documented`.
+  modifiers, such as `async` or `documented`. The kinds of the members of items, such as
+  fields and methods, are also in `memberKinds`: a rule selects a member only when it names
+  the kind.
 - **Lines**, for rules about lengths: the number of lines of each unit, as `unitLines`, and
   the line on which each declaration ends, as `endLine`. A front end that gives neither
   cannot have such rules: the core reports them as `no-subjects`.

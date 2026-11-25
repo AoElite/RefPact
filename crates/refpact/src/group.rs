@@ -94,9 +94,7 @@ pub trait RuleSet {
     /// rule that fails.
     #[track_caller]
     fn check(&self, krate: &Crate) {
-        if let Err(failure) = self.verify(krate) {
-            panic!("{failure}");
-        }
+        crate::passes(self.verify(krate));
     }
 
     /// Like [`RuleSet::verify`], with a baseline. See [`Rule::verify_with_baseline`].
@@ -107,9 +105,7 @@ pub trait RuleSet {
     /// Like [`RuleSet::check`], with a baseline. See [`Rule::check_with_baseline`].
     #[track_caller]
     fn check_with_baseline(&self, krate: &Crate, baseline: &Baseline) {
-        if let Err(failure) = self.verify_with_baseline(krate, baseline) {
-            panic!("{failure}");
-        }
+        crate::passes(self.verify_with_baseline(krate, baseline));
     }
 }
 

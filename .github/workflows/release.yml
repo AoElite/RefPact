@@ -35,6 +35,8 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    # A job that hangs is stopped and does not hold a runner for six hours.
+    timeout-minutes: 30
     permissions:
       contents: write # push the commit and the tag of a run by hand
     steps:
@@ -174,6 +176,8 @@ jobs:
     name: Publish the TypeScript package
     needs: release
     runs-on: ubuntu-latest
+    # A job that hangs is stopped and does not hold a runner for six hours.
+    timeout-minutes: 30
     permissions:
       id-token: write
     steps:

@@ -29,6 +29,10 @@ pub struct FactSet {
     pub declarations: Vec<Declaration>,
     /// All item kinds the front end can produce.
     pub item_kinds: Vec<String>,
+    /// The item kinds of the members of items, such as the fields and the methods of a type.
+    /// A rule about items selects a declaration of such a kind only when the kinds of the
+    /// rule name it. Default: none.
+    pub member_kinds: Vec<String>,
     /// All visibilities the front end can produce.
     pub visibilities: Vec<String>,
     /// All relations the front end can produce.

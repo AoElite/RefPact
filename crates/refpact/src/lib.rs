@@ -622,9 +622,7 @@ impl Rule {
     /// In a test, use `concat!(env!("CARGO_MANIFEST_DIR"), "/docs/modules.md")`.
     #[track_caller]
     pub fn check_diagram(&self, krate: &Crate, file: impl AsRef<std::path::Path>) {
-        if let Err(failure) = self.verify_diagram(krate, file) {
-            panic!("{failure}");
-        }
+        passes(self.verify_diagram(krate, file));
     }
 
     /// The diagram of the rule with these nodes.
@@ -684,9 +682,7 @@ impl Rule {
     /// Fails the test when the rule is violated or cannot be evaluated.
     #[track_caller]
     pub fn check(&self, krate: &Crate) {
-        if let Err(failure) = self.verify(krate) {
-            panic!("{failure}");
-        }
+        passes(self.verify(krate));
     }
 
     /// Like [`Rule::verify`], but violations that the baseline file accepts do not fail.
@@ -724,9 +720,7 @@ impl Rule {
     /// when the baseline has stale entries, or when the rule cannot be evaluated.
     #[track_caller]
     pub fn check_with_baseline(&self, krate: &Crate, baseline: &Baseline) {
-        if let Err(failure) = self.verify_with_baseline(krate, baseline) {
-            panic!("{failure}");
-        }
+        passes(self.verify_with_baseline(krate, baseline));
     }
 
     /// Writes the current violations of this rule to the baseline file. Entries of other
@@ -812,6 +806,14 @@ pub enum Failure {
     },
     /// Several rules of one group did not pass.
     Several(Vec<Failure>),
+}
+
+/// Fails the test when a rule failed, with the report of the failure.
+#[track_caller]
+pub(crate) fn passes(result: Result<(), Failure>) {
+    if let Err(failure) = result {
+        panic!("{failure}");
+    }
 }
 
 impl fmt::Display for Failure {

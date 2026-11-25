@@ -6,7 +6,7 @@ import type { DiagramFormat } from "./core/index.ts";
 import { verifyDiagram } from "./diagram.ts";
 import type { Project } from "./frontend/project.ts";
 import { filePattern } from "./patterns.ts";
-import { all, AnyOf, anyOf, ArchitectureError, Files, orFailure, rule } from "./rules.ts";
+import { all, AnyOf, anyOf, ArchitectureError, Files, orFailure, passes, rule } from "./rules.ts";
 import type { Failure, ImportRule } from "./rules.ts";
 
 interface Settings {
@@ -188,10 +188,7 @@ export class Layers extends RuleSet {
    * {@link Layers.diagram | diagram} of the layers. See {@link ImportRule.checkDiagram}.
    */
   checkDiagram(project: Project, file: string): void {
-    const failure = this.verifyDiagram(project, file);
-    if (failure !== undefined) {
-      throw new ArchitectureError(failure);
-    }
+    passes(this.verifyDiagram(project, file));
   }
 
   /** For each layer, by position from the top, the layers it may import; or every problem of the layers. */

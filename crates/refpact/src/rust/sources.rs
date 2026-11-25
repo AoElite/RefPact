@@ -3,8 +3,13 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
+use std::io::Read;
 use std::path::PathBuf;
+use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, Instant};
+
+use crate::rust::workers;
 
 mod analyzer;
 pub(crate) mod json;
@@ -26,6 +31,82 @@ pub(crate) struct Disk {
 
 /// The program that makes the index.
 pub(crate) const RUST_ANALYZER: &str = "rust-analyzer";
+
+/// The longest that a tool may take for a short answer: its version, or the options of a
+/// target.
+const ANSWER_LIMIT: Duration = Duration::from_secs(60);
+/// The longest that `cargo metadata` may take. With the dependencies, it can read from the
+/// network.
+const METADATA_LIMIT: Duration = Duration::from_secs(10 * 60);
+/// The longest that rust-analyzer may take for the index or for the expansions of the code.
+pub(crate) const INDEX_LIMIT: Duration = Duration::from_secs(60 * 60);
+
+/// Why a tool gave nothing.
+pub(crate) enum Stopped {
+    /// It did not start, or it could not be waited for.
+    NotStarted(std::io::Error),
+    /// It did not end in the time that it had, and was stopped.
+    Late(Duration),
+}
+
+/// A limit as a text says it: `60 seconds`, `10 minutes`.
+pub(crate) fn span(limit: Duration) -> String {
+    match limit.as_secs() {
+        seconds if seconds < 120 => format!("{seconds} seconds"),
+        seconds => format!("{} minutes", seconds / 60),
+    }
+}
+
+/// Runs a tool to its end and gives what it wrote. A tool that takes longer than `limit` is
+/// stopped: a test does not wait without end for a tool that waits for a lock or for the
+/// network.
+pub(crate) fn run_within(command: &mut Command, limit: Duration) -> Result<Output, Stopped> {
+    // Another thread reads each output, so that the tool does not wait for a reader.
+    fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> std::thread::JoinHandle<Vec<u8>> {
+        workers::in_background(move || {
+            let mut bytes = Vec::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_end(&mut bytes);
+            }
+            bytes
+        })
+    }
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(Stopped::NotStarted)?;
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
+    let end = Instant::now() + limit;
+    // Most tools answer in a few milliseconds, so the first looks come soon.
+    let mut pause = Duration::from_millis(1);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < end => {
+                std::thread::sleep(pause);
+                pause = (pause * 2).min(Duration::from_millis(50));
+            }
+            waited => {
+                let _ = child.kill();
+                let _ = child.wait();
+                // A program that the tool started can still hold the outputs open, so the
+                // threads that read them are left to end by themselves.
+                return Err(match waited {
+                    Err(error) => Stopped::NotStarted(error),
+                    Ok(_) => Stopped::Late(limit),
+                });
+            }
+        }
+    };
+    Ok(Output {
+        status,
+        stdout: stdout.join().unwrap_or_default(),
+        stderr: stderr.join().unwrap_or_default(),
+    })
+}
 
 impl Disk {
     /// The index that `rust-analyzer scip` writes for the directory, as bytes. The program
@@ -75,19 +156,26 @@ impl Disk {
                 output.display()
             ));
         }
-        let run = std::process::Command::new(program)
+        let mut command = Command::new(program);
+        command
             .arg("scip")
             .arg(&self.base)
             .arg("--output")
-            .arg(&output)
-            .output();
+            .arg(&output);
+        let run = run_within(&mut command, INDEX_LIMIT);
         let bytes = std::fs::read(&output);
-        let run = run.map_err(|error| {
+        let run = run.map_err(|stopped| {
             let _ = std::fs::remove_file(&output);
-            format!(
-                "`{program}` cannot be started ({error}); install it with \
-                 `rustup component add rust-analyzer`"
-            )
+            match stopped {
+                Stopped::NotStarted(error) => format!(
+                    "`{program}` cannot be started ({error}); install it with \
+                     `rustup component add rust-analyzer`"
+                ),
+                Stopped::Late(limit) => format!(
+                    "`{program} scip` did not end in {} and was stopped",
+                    span(limit)
+                ),
+            }
         });
         let failed = match &run {
             Ok(run) if run.status.success() => None,
@@ -137,9 +225,7 @@ impl Disk {
     /// with the version of the program.
     pub fn state(&self, program: &str, inputs: &[String]) -> u64 {
         let mut state = DefaultHasher::new();
-        let version = std::process::Command::new(program)
-            .arg("--version")
-            .output();
+        let version = run_within(Command::new(program).arg("--version"), ANSWER_LIMIT);
         version.map(|run| run.stdout).ok().hash(&mut state);
         for input in inputs {
             input.hash(&mut state);
@@ -232,24 +318,34 @@ pub(crate) fn file_name(path: &str) -> &str {
 /// option of the target on each line.
 pub(crate) fn target_options(target: Option<&str>) -> Result<String, String> {
     let program = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
-    let mut command = std::process::Command::new(&program);
+    let mut command = Command::new(&program);
     command.args(["--print", "cfg"]);
     if let Some(target) = target {
         command.args(["--target", target]);
     }
-    let shown = program.to_string_lossy();
-    let run = command
-        .output()
-        .map_err(|error| format!("`{shown}` cannot be started ({error})"))?;
+    output(command, "--print cfg", ANSWER_LIMIT)
+}
+
+/// The text that a tool writes in at most `limit`. `asked` names what the tool was run
+/// for, in the error.
+fn output(mut command: Command, asked: &str, limit: Duration) -> Result<String, String> {
+    let shown = command.get_program().to_string_lossy().into_owned();
+    let run = run_within(&mut command, limit).map_err(|stopped| match stopped {
+        Stopped::NotStarted(error) => format!("`{shown}` cannot be started ({error})"),
+        Stopped::Late(limit) => format!(
+            "`{shown} {asked}` did not end in {} and was stopped",
+            span(limit)
+        ),
+    })?;
     if !run.status.success() {
         let said = String::from_utf8_lossy(&run.stderr);
         let first = said.lines().find(|line| !line.trim().is_empty());
         return Err(format!(
-            "`{shown} --print cfg` failed: {}",
+            "`{shown} {asked}` failed: {}",
             first.unwrap_or("it gave no message")
         ));
     }
-    String::from_utf8(run.stdout).map_err(|_| format!("`{shown} --print cfg` wrote no text"))
+    String::from_utf8(run.stdout).map_err(|_| format!("`{shown} {asked}` wrote no text"))
 }
 
 /// A path of the file system without links. Cargo names files so; a link in the path of a
@@ -262,27 +358,31 @@ pub(crate) fn real(path: &std::path::Path) -> PathBuf {
 /// the arguments ask for.
 pub(crate) fn metadata(disk: &Disk, arguments: &[&str]) -> Result<String, String> {
     let program = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let shown = program.to_string_lossy();
-    let run = std::process::Command::new(&program)
+    let mut command = Command::new(&program);
+    command
         .args(["metadata", "--format-version", "1"])
         .args(arguments)
-        .current_dir(&disk.base)
-        .output()
-        .map_err(|error| format!("`{shown}` cannot be started ({error})"))?;
-    if !run.status.success() {
-        let said = String::from_utf8_lossy(&run.stderr);
-        let first = said.lines().find(|line| !line.trim().is_empty());
-        return Err(format!(
-            "`{shown} metadata` failed: {}",
-            first.unwrap_or("it gave no message")
-        ));
-    }
-    String::from_utf8(run.stdout).map_err(|_| format!("`{shown} metadata` wrote no text"))
+        .current_dir(&disk.base);
+    output(command, "metadata", METADATA_LIMIT)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A tool that does not end is stopped at its limit. One that ends gives what it wrote.
+    #[cfg(unix)]
+    #[test]
+    fn a_tool_that_does_not_end_is_stopped() {
+        let start = Instant::now();
+        let slow = run_within(Command::new("sleep").arg("3"), Duration::from_millis(50));
+        assert!(matches!(slow, Err(Stopped::Late(_))));
+        assert!(start.elapsed() < Duration::from_secs(2));
+        let quick = run_within(Command::new("echo").arg("text"), ANSWER_LIMIT);
+        assert_eq!(quick.ok().map(|ran| ran.stdout), Some(b"text\n".to_vec()));
+        assert_eq!(span(ANSWER_LIMIT), "60 seconds");
+        assert_eq!(span(METADATA_LIMIT), "10 minutes");
+    }
 
     #[test]
     fn join_normalises() {

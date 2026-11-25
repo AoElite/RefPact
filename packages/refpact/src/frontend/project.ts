@@ -11,8 +11,8 @@ import type { ComponentExtension } from "./components.ts";
 import { openProjects } from "./compiler.ts";
 import type { CompilerProject, Node, SourceFile, TsSymbol } from "./compiler.ts";
 import { DEPENDENCY_KINDS, dependencyFacts, PACKAGE_ITEM_KIND, PACKAGE_PROPERTIES } from "./dependencies.ts";
-import { collectDeclarations, ITEM_KINDS, MODIFIERS, RELATIONS, VISIBILITIES } from "./declarations.ts";
-import { collectAccesses, collectGlobalUses, collectMarkers, collectMemberUses, collectModuleUses, GLOBAL_KIND, KINDS, MARKERS, MEMBER_KIND } from "./imports.ts";
+import { collectDeclarations, ITEM_KINDS, MEMBER_KINDS, MODIFIERS, RELATIONS, VISIBILITIES } from "./declarations.ts";
+import { collectAccesses, collectGlobalUses, collectMarkers, collectMemberUses, collectModuleUses, collectNameSites, GLOBAL_KIND, KINDS, MARKERS, MEMBER_KIND } from "./imports.ts";
 import type { Kind, ModuleUse } from "./imports.ts";
 import { ATTACHED_PREFIXES, exportSegment, globalSegment, HIDDEN_PREFIXES, nodeSegment, packageSegment } from "./paths.ts";
 
@@ -33,6 +33,18 @@ export interface LoadOptions {
    * takes longer. Default: `false`.
    */
   readonly resolveMembers?: boolean;
+  /**
+   * Lets each use of an imported name count as an import, inside the item that holds it.
+   * After `import { query } from "./db"`, each `query(..)` is a reference to
+   * `src/db.ts#query`, of the kind of its import, and every reference says which item of
+   * the file it is in. A rule about what the code of an item imports needs this:
+   * `items(..).mustNotImport(..)` and `mustOnlyImport(..)`.
+   *
+   * A rule about files then reports the import and each use of its name, as a rule about
+   * modules does in Rust. The load reads every function body and asks the compiler about
+   * each place, which takes longer. Default: `false`.
+   */
+  readonly resolveUses?: boolean;
   /**
    * Lets a use of a member of an interface or of a class also count as a use of the same
    * member of each class of the project that implements or extends it. `store.save(order)`,
@@ -158,7 +170,7 @@ export function loadProject(tsconfig: string | readonly string[], options: LoadO
     try {
       const own = configFiles.filter((file) => !written.includes(path.dirname(file)));
       const members = options.resolveMembers === true || options.followImplementations === true;
-      const facts = analyse(root, session.projects, members, options.followImplementations === true, extensions);
+      const facts = analyse(root, session.projects, members, options.followImplementations === true, options.resolveUses === true, extensions);
       project = new Project(root, own, options.readDependencies === true ? withDependencies(root, facts) : facts);
     } finally {
       session.close();
@@ -298,7 +310,14 @@ function withDependencies(root: string, facts: FactSet): FactSet {
   };
 }
 
-function analyse(root: string, projects: readonly CompilerProject[], members: boolean, implementations: boolean, components: readonly ComponentExtension[]): FactSet {
+function analyse(
+  root: string,
+  projects: readonly CompilerProject[],
+  members: boolean,
+  implementations: boolean,
+  nameUses: boolean,
+  components: readonly ComponentExtension[],
+): FactSet {
   // A file belongs to the first project that has it. Its imports are resolved there.
   const units = new Map<string, Unit>();
   for (const project of projects) {
@@ -325,7 +344,7 @@ function analyse(root: string, projects: readonly CompilerProject[], members: bo
       continue;
     }
     unitLines.push(countLines(sourceFile.text));
-    const found = factsOfFile(unit, sourceFile, lookup, members);
+    const found = factsOfFile(unit, sourceFile, lookup, members, nameUses);
     for (const name of found.exportNames) {
       items.push([...unit.path, exportSegment(name)]);
     }
@@ -354,6 +373,7 @@ function analyse(root: string, projects: readonly CompilerProject[], members: bo
     facts,
     declarations,
     itemKinds: [...ITEM_KINDS],
+    memberKinds: [...MEMBER_KINDS],
     visibilities: [...VISIBILITIES],
     relations: [...RELATIONS],
     modifiers: [...MODIFIERS],
@@ -491,6 +511,7 @@ function factsOfFile(
   sourceFile: SourceFile,
   lookup: UnitLookup,
   resolveMembers: boolean,
+  resolveUses: boolean,
 ): { facts: Fact[]; exportNames: string[]; declarations: Declaration[] } {
   const project = unit.project;
   // A TypeScript file is read without a visit of the nodes that cannot name a module.
@@ -522,20 +543,38 @@ function factsOfFile(
   const markers = collectMarkers(sourceFile, prune);
   const askedMarkers = markers.map((use) => (use.object !== undefined ? ask(use.object) : undefined));
   const declared = collectDeclarations(sourceFile);
-  const askedDeclared = declared.map((item) => ({ at: ask(item.at), ties: item.ties.map((tie) => ask(tie.from?.specifier ?? tie.node)) }));
+  // The compiler says whether the file exports an item. A member has its visibility in its syntax.
+  const askedDeclared = declared.map((item) => ({ at: item.member === undefined ? ask(item.at) : undefined, ties: item.ties.map((tie) => ask(tie.from?.specifier ?? tie.node)) }));
+  const pathOf = (item: (typeof declared)[number]): Path => [...unit.path, ...(item.member !== undefined ? [exportSegment(item.member.owner)] : []), exportSegment(item.name)];
+  const sites = resolveUses ? collectNameSites(sourceFile, uses) : [];
+  const askedSites = sites.map((site) => (site.shorthand === undefined ? ask(site.node) : undefined));
+  // The innermost item around a position: a member comes after its class, and is inside it.
+  const itemAt = (position: number): Path | undefined => {
+    const around = declared.findLast((item) => item.whole.getStart(sourceFile) <= position && position < item.whole.end);
+    return around === undefined ? undefined : pathOf(around);
+  };
   const symbols = project.symbolsAt(nodes);
   const symbol = (index: number | undefined): TsSymbol | undefined => (index === undefined ? undefined : symbols[index]);
 
   const facts: Fact[] = [];
-  const add = (node: Node, kind: Kind, target: Path, aliases: Path[], note: string | undefined, certainty: "exact" | "candidate" = "exact"): void => {
-    const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
-    facts.push({
+  // What a fact at a node has, except what it is.
+  const placed = (node: Node, note: string | undefined): Omit<Fact, "what"> => {
+    const start = node.getStart(sourceFile);
+    const position = sourceFile.getLineAndCharacterOfPosition(start);
+    const item = resolveUses ? itemAt(start) : undefined;
+    return {
       unit: unit.path,
+      ...(item !== undefined ? { item } : {}),
       file: unit.path.join("/"),
       line: position.line + 1,
       column: position.character + 1,
       tags: [],
       ...(note !== undefined ? { note } : {}),
+    };
+  };
+  const add = (node: Node, kind: Kind, target: Path, aliases: Path[], note: string | undefined, certainty: "exact" | "candidate" = "exact"): void => {
+    facts.push({
+      ...placed(node, note),
       what: {
         type: "reference",
         target,
@@ -546,16 +585,7 @@ function factsOfFile(
     });
   };
   const mark = (node: Node, marker: (typeof MARKERS)[number], note: string | undefined): void => {
-    const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
-    facts.push({
-      unit: unit.path,
-      file: unit.path.join("/"),
-      line: position.line + 1,
-      column: position.character + 1,
-      tags: [],
-      ...(note !== undefined ? { note } : {}),
-      what: { type: "marker", marker },
-    });
+    facts.push({ ...placed(node, note), what: { type: "marker", marker } });
   };
 
   // A global of the host: declared, but in no file of the project and not in the ECMAScript library.
@@ -579,20 +609,12 @@ function factsOfFile(
     if (asked !== undefined && isDeclaredInProject(symbol(asked), project, lookup)) {
       return;
     }
-    const position = sourceFile.getLineAndCharacterOfPosition(use.at.getStart(sourceFile));
-    facts.push({
-      unit: unit.path,
-      file: unit.path.join("/"),
-      line: position.line + 1,
-      column: position.character + 1,
-      tags: [],
-      what: { type: "marker", marker: use.marker },
-    });
+    mark(use.at, use.marker, undefined);
   });
 
   const resolved = new Map<ModuleUse, ResolvedModule>();
   // The paths of each imported name, by its symbol, for the relations of the declarations.
-  const imported: { readonly symbol: TsSymbol; readonly paths: Path[] }[] = [];
+  const imported: { readonly symbol: TsSymbol; readonly paths: Path[]; readonly kind: Kind; readonly note: string | undefined }[] = [];
   uses.forEach((use, index) => {
     const indexes = asked[index] as (typeof asked)[number];
     // A `require` that is declared in the project is a local function, not Node's.
@@ -643,9 +665,19 @@ function factsOfFile(
       aliases.push(...declarations(nameSymbol, project, lookup, false, from));
       add(name.node, name.kind, target, aliases, module.note);
       if (nameSymbol !== undefined) {
-        imported.push({ symbol: nameSymbol, paths: [target, ...aliases] });
+        imported.push({ symbol: nameSymbol, paths: [target, ...aliases], kind: name.kind, note: module.note });
       }
     });
+  });
+
+  // A use of a name that an import binds is an import of what the name stands for.
+  sites.forEach((site, index) => {
+    const used = site.shorthand !== undefined ? project.shorthandValueAt(site.shorthand) : symbol(askedSites[index]);
+    const entry = used === undefined ? undefined : imported.find((name) => project.same(name.symbol, used));
+    const [target, ...aliases] = entry?.paths ?? [];
+    if (entry !== undefined && target !== undefined) {
+      add(site.node, entry.kind, target, aliases, entry.note);
+    }
   });
 
   // `object.name`, where the name is a member of a class, an interface or an enum that
@@ -717,7 +749,7 @@ function factsOfFile(
     });
     const position = sourceFile.getLineAndCharacterOfPosition(item.at.getStart(sourceFile));
     return {
-      path: [...unit.path, exportSegment(item.name)],
+      path: pathOf(item),
       name: item.name,
       unit: unit.path,
       file: unit.path.join("/"),
@@ -726,7 +758,7 @@ function factsOfFile(
       endLine: sourceFile.getLineAndCharacterOfPosition(item.whole.end).line + 1,
       tags: [],
       kind: item.kind,
-      visibility: item.exported || isExported(symbol(indexes.at)) ? "exported" : "local",
+      visibility: item.member?.visibility ?? (item.exported || isExported(symbol(indexes.at)) ? "exported" : "local"),
       relations,
       modifiers: [...item.modifiers],
     };

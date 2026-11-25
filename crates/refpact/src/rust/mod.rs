@@ -76,8 +76,10 @@ pub struct Crate {
 impl Crate {
     /// Analyses the crate in `manifest_dir`. The root is the root file of the library that
     /// Cargo names for the package, or of its program when it has no library: `src/lib.rs`
-    /// or `src/main.rs` unless the manifest says otherwise. A directory without a
-    /// `Cargo.toml` is read as a crate with one of these two roots.
+    /// or `src/main.rs` unless the manifest says otherwise. The other programs of the
+    /// package are read as more code of the crate: a module of `src/main.rs` is
+    /// `crate::name`, as a module of the library is. A directory without a `Cargo.toml` is
+    /// read as a crate with one of these two roots.
     ///
     /// The load reads the syntax only. Method calls and field accesses are references with
     /// [`Options::resolving_members`].
@@ -107,8 +109,9 @@ impl Crate {
             .map(|(path, text)| ((*path).to_owned(), (*text).to_owned()))
             .collect();
         let settings = cfg::Settings::default();
-        let (_, mut facts, ..) =
-            analyse_tree(&sources::Memory { files }, root, &[], false, &settings)?;
+        let sources = sources::Memory { files };
+        let (tree, mut facts, ..) = analyse_tree(&sources, root, false, &settings)?;
+        check_unreached(&sources, root, &[&tree], &[])?;
         cfg::finish(&mut facts, &settings);
         Ok(Crate::new(facts))
     }
@@ -145,6 +148,7 @@ pub struct Options {
 
 impl Options {
     /// Sets the crate root, relative to the manifest directory, for example `src/main.rs`.
+    /// The load then reads this crate only, without the other programs of the package.
     pub fn root(mut self, path: impl Into<String>) -> Options {
         self.root = Some(path.into());
         self
@@ -214,14 +218,12 @@ fn read_index(disk: &sources::Disk, mut files: Vec<String>) -> Result<scip::Inde
 fn analyse_tree(
     sources: &dyn Sources,
     root: &str,
-    allowed: &[String],
     calls: bool,
     settings: &cfg::Settings,
 ) -> Result<(load::Tree, FactSet, Vec<items::Impl>, calls::Pending), LoadError> {
     let (tree, mut found) = load::load(sources, root, calls)?;
     items::attach_impls(&mut found.declarations, &found.impls);
     items::attach_exports(&mut found.declarations, &tree.modules);
-    check_unreached(sources, root, &tree, allowed)?;
 
     let mut units: Vec<Path> = Vec::new();
     let mut unit_lines: Vec<u32> = Vec::new();
@@ -274,6 +276,7 @@ fn analyse_tree(
         facts: found.facts,
         declarations: found.declarations,
         item_kinds: to_strings(items::item_kind::ALL),
+        member_kinds: to_strings(items::item_kind::MEMBERS),
         visibilities: to_strings(items::visibility::ALL),
         relations: to_strings(items::relation::ALL),
         modifiers: to_strings(items::modifier::ALL),
@@ -286,14 +289,18 @@ fn analyse_tree(
 
 /// A file that no `mod` declaration reaches is not checked by any rule. That is an error
 /// unless it is another crate root of the package or is allowed by name.
+///
+/// `trees` are the crates of the package that the load reads: its library at `root`, and
+/// its programs. A file that one of them reaches is checked.
 fn check_unreached(
     sources: &dyn Sources,
     root: &str,
-    tree: &load::Tree,
+    trees: &[&load::Tree],
     allowed: &[String],
 ) -> Result<(), LoadError> {
     let root_dir = sources::parent(root);
-    let reached: BTreeSet<&str> = tree.files.iter().map(|file| file.path.as_str()).collect();
+    let files = trees.iter().flat_map(|tree| &tree.files);
+    let reached: BTreeSet<&str> = files.map(|file| file.path.as_str()).collect();
     let other_roots = [
         sources::join(root_dir, "lib.rs"),
         sources::join(root_dir, "main.rs"),

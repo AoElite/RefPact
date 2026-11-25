@@ -34,6 +34,12 @@ whose name or file contains it, so after a change to one file you can check only
 `cargo xtask mutants ts imports.ts`. Run it when you change how code is read or
 how a rule is evaluated; the ordinary tests are enough for other changes.
 
+Nothing waits without end. A test of the package has 60 seconds
+([`vitest.config.ts`](../packages/refpact/vitest.config.ts)), each program that a test or a
+task starts has a limit after which it is stopped, and each CI job has 30 minutes. The test
+files of the package share their imports in four workers, which is faster than one new
+worker for each file.
+
 The tests in `crates/refpact/tests/calls.rs` run rust-analyzer on the fixture
 `fixtures/rust/calls`, and fail without it: `rustup component add rust-analyzer`.
 

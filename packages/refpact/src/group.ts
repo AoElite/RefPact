@@ -1,7 +1,7 @@
 /** Groups: several rules that are checked together and report every failure. */
 import type { Baseline } from "./baseline.ts";
 import type { Project } from "./frontend/project.ts";
-import { ArchitectureError } from "./rules.ts";
+import { ArchitectureError, passes } from "./rules.ts";
 import type { Failure, ImportRule } from "./rules.ts";
 
 /**
@@ -51,10 +51,7 @@ export abstract class RuleSet {
 
   /** Throws an {@link ArchitectureError} when a rule is violated or cannot be evaluated. The report has every rule that fails. */
   check(project: Project): void {
-    const failure = this.verify(project);
-    if (failure !== undefined) {
-      throw new ArchitectureError(failure);
-    }
+    passes(this.verify(project));
   }
 
   /** Like {@link RuleSet.verify}, with a baseline. See {@link ImportRule.verifyWithBaseline}. */
@@ -64,10 +61,7 @@ export abstract class RuleSet {
 
   /** Like {@link RuleSet.check}, with a baseline. See {@link ImportRule.checkWithBaseline}. */
   checkWithBaseline(project: Project, baseline: Baseline): void {
-    const failure = this.verifyWithBaseline(project, baseline);
-    if (failure !== undefined) {
-      throw new ArchitectureError(failure);
-    }
+    passes(this.verifyWithBaseline(project, baseline));
   }
 
   private all(verify: (made: ImportRule) => Failure | undefined): Failure | undefined {

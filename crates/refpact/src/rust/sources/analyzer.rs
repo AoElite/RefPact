@@ -5,9 +5,13 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex};
 
 use super::json::Json;
-use super::{Disk, RUST_ANALYZER};
+use super::{span, Disk, INDEX_LIMIT, RUST_ANALYZER};
+use crate::rust::workers;
 
 /// The expansions of some macros, by the place of the macro: the file, the line and the
 /// column.
@@ -157,10 +161,15 @@ fn ask(disk: &Disk, places: &[(String, u32, u32)]) -> Result<Expansions, String>
 
 /// rust-analyzer as a language server: messages of JSON, each after a header with its length.
 struct Server {
-    child: Child,
+    child: Arc<Mutex<Child>>,
     input: ChildStdin,
     output: BufReader<ChildStdout>,
     requests: u32,
+    /// The server took longer than [`INDEX_LIMIT`] and was stopped.
+    late: Arc<AtomicBool>,
+    /// While this is there, a thread waits for the limit. It stops the server then, so
+    /// that no wait for a message is without end.
+    _watched: Sender<()>,
 }
 
 impl Server {
@@ -179,11 +188,25 @@ impl Server {
         let (Some(input), Some(output)) = (child.stdin.take(), child.stdout.take()) else {
             return Err(format!("`{RUST_ANALYZER}` has no input and output"));
         };
+        let child = Arc::new(Mutex::new(child));
+        let late = Arc::new(AtomicBool::new(false));
+        let (watched, done) = mpsc::channel::<()>();
+        let (stopped, slow) = (Arc::clone(&child), Arc::clone(&late));
+        workers::in_background(move || {
+            if done.recv_timeout(INDEX_LIMIT) == Err(RecvTimeoutError::Timeout) {
+                slow.store(true, Ordering::Relaxed);
+                if let Ok(mut child) = stopped.lock() {
+                    let _ = child.kill();
+                }
+            }
+        });
         Ok(Server {
             child,
             input,
             output: BufReader::new(output),
             requests: 0,
+            late,
+            _watched: watched,
         })
     }
 
@@ -222,7 +245,14 @@ impl Server {
 
     /// Reads one message. A request of the server gets an empty answer.
     fn receive(&mut self) -> Result<Json, String> {
-        let gone = || format!("`{RUST_ANALYZER}` stopped before it gave the expansions");
+        let late = Arc::clone(&self.late);
+        let gone = move || match late.load(Ordering::Relaxed) {
+            true => format!(
+                "`{RUST_ANALYZER}` did not give the expansions in {} and was stopped",
+                span(INDEX_LIMIT)
+            ),
+            false => format!("`{RUST_ANALYZER}` stopped before it gave the expansions"),
+        };
         let mut length = None;
         loop {
             let mut header = String::new();
@@ -237,10 +267,10 @@ impl Server {
                 length = value.trim().parse::<usize>().ok();
             }
         }
-        let mut body = vec![0; length.ok_or_else(gone)?];
+        let mut body = vec![0; length.ok_or_else(&gone)?];
         self.output.read_exact(&mut body).map_err(|_| gone())?;
         let text = String::from_utf8(body).map_err(|_| gone())?;
-        let message = Json::parse(&text).ok_or_else(gone)?;
+        let message = Json::parse(&text).ok_or_else(&gone)?;
         if let (Some(_), Some(id)) = (message.get("method"), message.get("id")) {
             let id = match id {
                 Json::Text(id) => json_text(id),
@@ -279,8 +309,10 @@ impl Server {
     fn stop(mut self) {
         let _ = self.request("shutdown", "null");
         let _ = self.notify("exit", "null");
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if let Ok(mut child) = self.child.lock() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
     }
 }
 
