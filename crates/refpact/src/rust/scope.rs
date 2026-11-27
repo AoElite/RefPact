@@ -420,11 +420,15 @@ impl Resolver<'_> {
         name: &str,
         skip: Option<&[String]>,
     ) -> Option<Path> {
-        let imports = self.modules[module].names.imports.get(name)?;
+        let owner = &self.modules[module];
+        let imports = owner.names.imports.get(name)?;
+        let enclosing = owner.cfg.as_deref().unwrap_or_default();
         if imports
             .iter()
             .any(|import| Some(import.path.as_slice()) == skip)
-            || !imports.iter().any(|import| !import.cfg.is_empty())
+            || !imports
+                .iter()
+                .any(|import| import.cfg.iter().any(|tag| !enclosing.contains(tag)))
         {
             return None;
         }
