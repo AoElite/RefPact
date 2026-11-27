@@ -627,7 +627,7 @@ fn merge(
         }
     };
     // The definitions behind a path that starts with the name of another member.
-    let behind = |path: &Path, own: usize| -> Vec<Path> {
+    let behind = |path: &Path, own: usize| -> Vec<(Vec<Path>, Vec<String>)> {
         let Some(&other) = path.first().and_then(|head| names.get(head.as_str())) else {
             return Vec::new();
         };
@@ -636,14 +636,20 @@ fn merge(
         }
         let mut inside = path.clone();
         inside[0] = "crate".to_owned();
-        let mut aliases = Resolver {
+        let resolver = Resolver {
             modules: &loaded[other].1.modules,
-        }
-        .aliases(&inside);
-        for alias in &mut aliases {
-            rename(alias, &loaded[other].0.name);
-        }
-        aliases
+        };
+        let mut chains = Vec::new();
+        resolver.alias_chains(&inside, |aliases, cfg| {
+            if !aliases.is_empty() {
+                let mut aliases = aliases.to_vec();
+                for alias in &mut aliases {
+                    rename(alias, &loaded[other].0.name);
+                }
+                chains.push((aliases, cfg.to_vec()));
+            }
+        });
+        chains
     };
 
     let mut merged = FactSet {
@@ -657,7 +663,10 @@ fn merge(
         for path in paths {
             let mut path = path.clone();
             rename(&mut path, member);
-            for found in std::iter::once(path.clone()).chain(behind(&path, index)) {
+            let aliases = behind(&path, index)
+                .into_iter()
+                .flat_map(|(paths, _)| paths);
+            for found in std::iter::once(path).chain(aliases) {
                 if !wide.contains(&found) {
                     wide.push(found);
                 }
@@ -734,6 +743,8 @@ fn merge(
             }
             merged.declarations.push(declaration);
         }
+        // Keep the position of every original fact for the pending index sites.
+        let mut alternatives = Vec::new();
         for mut fact in facts.facts {
             in_place(&mut fact.unit);
             if let Some(item) = &mut fact.item {
@@ -743,20 +754,28 @@ fn merge(
             if let What::Reference(reference) = &mut fact.what {
                 in_place(&mut reference.target);
                 reference.aliases.iter_mut().for_each(in_place);
-                let known: Vec<Path> = std::iter::once(&reference.target)
-                    .chain(&reference.aliases)
-                    .cloned()
-                    .collect();
-                for path in &known {
-                    for alias in behind(path, index) {
-                        if alias != reference.target && !reference.aliases.contains(&alias) {
-                            reference.aliases.push(alias);
+                // A chain leaves this crate only at its last path.
+                let end = reference.aliases.last().unwrap_or(&reference.target);
+                let routes = behind(end, index);
+                let mut routes = routes.into_iter();
+                if let Some((first, conditions)) = routes.next() {
+                    for (chain, conditions) in routes {
+                        let mut other = fact.clone();
+                        if let What::Reference(reference) = &mut other.what {
+                            reference.aliases.extend(chain);
                         }
+                        other.tags = cfg::joined(&other.tags, &conditions);
+                        alternatives.push(other);
                     }
+                    if let What::Reference(reference) = &mut fact.what {
+                        reference.aliases.extend(first);
+                    }
+                    fact.tags = cfg::joined(&fact.tags, &conditions);
                 }
             }
             merged.facts.push(fact);
         }
+        merged.facts.extend(alternatives);
     }
     items::attach_impls(&mut merged.declarations, &impls);
     if let Some((index, packages, expansions)) = &index {

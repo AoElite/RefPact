@@ -29,6 +29,8 @@ pub(crate) struct Import {
     pub line: u32,
     /// `pub use`: the leaf re-exports its name to other crates.
     pub public: bool,
+    /// Conditions on this import and on its enclosing module.
+    pub cfg: Vec<String>,
     /// True from the time that the resolution of the leaf begins. A leaf that is asked for
     /// while it is resolved is part of a cycle.
     busy: AtomicBool,
@@ -37,12 +39,19 @@ pub(crate) struct Import {
 }
 
 impl Import {
-    pub fn new(path: Vec<String>, leading_colon: bool, line: u32, public: bool) -> Arc<Import> {
+    pub fn new(
+        path: Vec<String>,
+        leading_colon: bool,
+        line: u32,
+        public: bool,
+        cfg: Vec<String>,
+    ) -> Arc<Import> {
         Arc::new(Import {
             path,
             leading_colon,
             line,
             public,
+            cfg,
             busy: AtomicBool::new(false),
             done: OnceLock::new(),
         })
@@ -62,13 +71,14 @@ impl Names {
     ///
     /// The leaves of `use` declarations are made again and not shared: the path of a leaf
     /// depends on the module that it is in, and one file can be the file of two modules.
-    pub fn absorb(&mut self, other: &Names) {
+    pub fn absorb(&mut self, other: &Names, cfg: &[String]) {
         let again = |import: &Arc<Import>| {
             Import::new(
                 import.path.clone(),
                 import.leading_colon,
                 import.line,
                 import.public,
+                super::cfg::joined(cfg, &import.cfg),
             )
         };
         for (name, kind) in &other.items {
@@ -140,6 +150,7 @@ pub(crate) enum Single {
 
 const MAX_DEPTH: usize = 16;
 
+#[derive(Clone, Copy)]
 pub(crate) struct Resolver<'a> {
     pub modules: &'a [Module],
 }
@@ -273,59 +284,88 @@ impl Resolver<'_> {
             || self.modules[module].names.imports.contains_key(name)
     }
 
-    /// The other paths that a path of the analysed crate denotes through re-exports.
-    /// The last one is the path of the definition.
-    pub fn aliases(&self, path: &[String]) -> Vec<Path> {
-        let mut aliases: Vec<Path> = Vec::new();
-        let mut current: Path = path.to_vec();
-        while aliases.len() < MAX_DEPTH {
-            let Some(next) = self.follow_reexport(&current) else {
-                break;
-            };
-            if next == path || aliases.contains(&next) {
-                break;
-            }
-            aliases.push(next.clone());
-            current = next;
+    /// Visit each chain separately: alternate re-exports can have distinct definitions
+    /// and different conditions for when their names are available.
+    pub fn alias_chains(&self, path: &[String], mut visit: impl FnMut(&[Path], &[String])) {
+        self.walk_aliases(path, path, &mut Vec::new(), &[], &mut visit);
+    }
+
+    fn walk_aliases(
+        &self,
+        root: &[String],
+        path: &[String],
+        chain: &mut Vec<Path>,
+        cfg: &[String],
+        visit: &mut impl FnMut(&[Path], &[String]),
+    ) {
+        let mut followed = false;
+        if chain.len() < MAX_DEPTH {
+            self.reexports(path, |next, conditions| {
+                if next != root && !chain.contains(&next) {
+                    followed = true;
+                    chain.push(next.clone());
+                    let conditions = super::cfg::joined(cfg, conditions);
+                    self.walk_aliases(root, &next, chain, &conditions, visit);
+                    chain.pop();
+                }
+            });
         }
+        if !followed {
+            visit(chain, cfg);
+        }
+    }
+
+    /// All names reached from the path, for consumers that collect a set of names.
+    pub fn aliases(&self, path: &[String]) -> Vec<Path> {
+        let mut aliases = Vec::new();
+        self.alias_chains(path, |chain, _| {
+            for next in chain {
+                if !aliases.contains(next) {
+                    aliases.push(next.clone());
+                }
+            }
+        });
         aliases
     }
 
-    /// One step through a re-export: the path that `path` stands for, when a segment of it
-    /// is a `use` in its module and not a declaration.
-    fn follow_reexport(&self, path: &[String]) -> Option<Path> {
+    /// One step through the first imported segment of a path.
+    fn reexports(&self, path: &[String], mut emit: impl FnMut(Path, &[String])) {
         if path.first().map(String::as_str) != Some("crate") {
-            return None;
+            return;
         }
         let mut module = 0;
         for (index, segment) in path.iter().enumerate().skip(1) {
             let names = &self.modules[module].names;
+            let mut step = |mut target: Path, conditions: &[String]| {
+                target.extend_from_slice(&path[index + 1..]);
+                emit(target, conditions);
+            };
             match names.items.get(segment) {
                 Some(Name::Module(child)) => {
                     module = *child;
                     continue;
                 }
-                Some(Name::ExternCrate(real)) => {
-                    let mut target = vec![real.clone()];
-                    target.extend_from_slice(&path[index + 1..]);
-                    return Some(target);
+                Some(Name::ExternCrate(real)) => step(vec![real.clone()], &[]),
+                Some(_) => {}
+                None => {
+                    let mut found = false;
+                    for import in names.imports.get(segment).into_iter().flatten() {
+                        if let Some(target) = self.import(module, &[], import) {
+                            step(target, &import.cfg);
+                            found = true;
+                        }
+                    }
+                    if !found {
+                        if let Some(base) =
+                            self.provided_by_globs(names, module, &[], segment, &mut Vec::new())
+                        {
+                            step(base, &[]);
+                        }
+                    }
                 }
-                Some(_) => return None,
-                None => {}
             }
-            let mut target = names
-                .imports
-                .get(segment)
-                .and_then(|imports| {
-                    imports
-                        .iter()
-                        .find_map(|import| self.import(module, &[], import))
-                })
-                .or_else(|| self.provided_by_globs(names, module, &[], segment, &mut Vec::new()))?;
-            target.extend_from_slice(&path[index + 1..]);
-            return Some(target);
+            return;
         }
-        None
     }
 
     fn lookup(
@@ -356,6 +396,9 @@ impl Resolver<'_> {
                 via: None,
             };
         }
+        if let Some(path) = self.conditional_binding(module, head, skip) {
+            return Lookup::Found { path, via: None };
+        }
         if let Some(found) = self.in_imports(names, module, &[], head, skip) {
             return found;
         }
@@ -367,6 +410,27 @@ impl Resolver<'_> {
         } else {
             Lookup::Candidates(candidates)
         }
+    }
+
+    /// Keep the module binding so alias resolution can attach the condition of each
+    /// possible definition. A use leaf cannot supply its own first segment.
+    fn conditional_binding(
+        &self,
+        module: usize,
+        name: &str,
+        skip: Option<&[String]>,
+    ) -> Option<Path> {
+        let imports = self.modules[module].names.imports.get(name)?;
+        if imports
+            .iter()
+            .any(|import| Some(import.path.as_slice()) == skip)
+            || !imports.iter().any(|import| !import.cfg.is_empty())
+        {
+            return None;
+        }
+        let mut path = self.modules[module].path.clone();
+        path.push(name.to_owned());
+        Some(path)
     }
 
     fn in_imports(
@@ -483,6 +547,9 @@ impl Resolver<'_> {
                 if let Some(kind) = names.items.get(name) {
                     return Some(self.item_path(module, name, kind));
                 }
+                if let Some(path) = self.conditional_binding(module, name, None) {
+                    return Some(path);
+                }
                 if let Some(imports) = names.imports.get(name) {
                     if let Some(path) = imports
                         .iter()
@@ -546,7 +613,11 @@ impl Resolver<'_> {
             if !seen.insert(current.clone()) || seen.len() > MAX_DEPTH {
                 return Located::Other;
             }
-            match self.follow_reexport(&current) {
+            let mut next = None;
+            self.reexports(&current, |path, _| {
+                next.get_or_insert(path);
+            });
+            match next {
                 Some(next) => current = next,
                 None => return Located::Other,
             }

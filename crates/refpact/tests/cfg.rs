@@ -1,6 +1,8 @@
 //! The `cfg` conditions of the code: each is a tag of the facts under it, a rule can leave
 //! one out, and a load for one target leaves out what the target switches off.
 
+mod support;
+
 use std::sync::LazyLock;
 
 use refpact::core::What;
@@ -272,4 +274,57 @@ fn layers_and_an_onion_can_leave_a_condition_out() {
     };
     assert!(made().verify(&shop).is_err());
     made().except_under_cfg("windows").check(&shop);
+}
+
+#[test]
+fn a_reference_follows_each_enabled_named_reexport() {
+    let dir = std::env::temp_dir().join(format!("refpact-cfg-reexports-{}", std::process::id()));
+    let _remove = support::Removed(dir.clone());
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(dir.join("Cargo.toml"), "[package]\nname='switch'\nversion='0.0.0'\nedition='2021'\n[features]\nfast=[]\n[workspace]\n").unwrap();
+    let slow = "#[cfg(not(feature = \"fast\"))] pub use crate::slow::Driver;";
+    let fast = "#[cfg(feature = \"fast\")] pub use crate::fast::Driver;";
+    std::fs::write(
+        dir.join("src/main.rs"),
+        "pub mod binary_client { pub fn use_driver(_: switch::facade::Driver) {} } fn main() {}",
+    )
+    .unwrap();
+    let law = |client| {
+        rule("client avoids fast")
+            .modules(any_of([client]))
+            .must_not_use(any_of(["crate::fast"]))
+    };
+    for (first, second) in [(slow, fast), (fast, slow)] {
+        std::fs::write(
+            dir.join("src/lib.rs"),
+            format!(
+                "
+pub mod slow {{ pub struct Driver; }}
+pub mod fast {{ pub struct Driver; }}
+pub mod facade {{ {first} {second} }}
+pub mod client {{ pub fn use_driver(_: crate::facade::Driver) {{}}
+    #[cfg(not(feature = \"fast\"))] pub fn slow_only(_: crate::facade::Driver) {{}} }}
+"
+            ),
+        )
+        .unwrap();
+        let options = || Crate::options(&dir);
+        for (label, app, expected) in [
+            ("all", options().load().unwrap(), 1),
+            ("fast", options().features(["fast"]).load().unwrap(), 1),
+            (
+                "slow",
+                options().features(Vec::<String>::new()).load().unwrap(),
+                0,
+            ),
+        ] {
+            for client in ["crate::client", "crate::binary_client"] {
+                assert_eq!(
+                    law(client).evaluate(&app).unwrap().len(),
+                    expected,
+                    "{label}, {client}: {first}"
+                );
+            }
+        }
+    }
 }

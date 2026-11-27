@@ -31,6 +31,7 @@ pub(crate) fn declare_item(names: &mut Names, item: &Item) {
                     item.leading_colon.is_some(),
                     leaf.span.start().line as u32,
                     matches!(item.vis, syn::Visibility::Public(_)),
+                    super::cfg::tags(&item.attrs),
                 );
                 if leaf.glob {
                     names.globs.push(import);

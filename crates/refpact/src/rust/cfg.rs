@@ -116,6 +116,17 @@ fn text(meta: &Meta) -> String {
     }
 }
 
+/// The conditions around a declaration and its own, each one time.
+pub(crate) fn joined(outer: &[String], own: &[String]) -> Vec<String> {
+    let mut all = outer.to_vec();
+    for tag in own {
+        if !all.contains(tag) {
+            all.push(tag.clone());
+        }
+    }
+    all
+}
+
 /// What a load knows of the build that it checks. Empty by default: all code is checked.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Settings {
@@ -200,6 +211,22 @@ impl Settings {
     }
 }
 
+/// A use and its re-export can require opposite values of the same condition.
+fn contradictory(tags: &[String]) -> bool {
+    tags.len() > 1
+        && tags.iter().any(|tag| {
+            let Some(inner) = tag
+                .strip_prefix("cfg(not(")
+                .and_then(|s| s.strip_suffix("))"))
+            else {
+                return false;
+            };
+            tags.iter().any(|other| {
+                other.strip_prefix("cfg(").and_then(|s| s.strip_suffix(')')) == Some(inner)
+            })
+        })
+}
+
 /// Completes a fact set: its tags are the tag of test code and the conditions of its facts
 /// and its declarations, and what the build of the settings leaves out is taken away.
 pub(crate) fn finish(facts: &mut FactSet, settings: &Settings) {
@@ -221,10 +248,8 @@ pub(crate) fn finish(facts: &mut FactSet, settings: &Settings) {
         .filter(|tag| settings.holds(tag) == Some(false))
         .cloned()
         .collect();
-    if off.is_empty() {
-        return;
-    }
-    let left_out = |tags: &[String]| tags.iter().any(|tag| off.contains(tag));
+    let left_out =
+        |tags: &[String]| tags.iter().any(|tag| off.contains(tag)) || contradictory(tags);
     facts.facts.retain(|fact| !left_out(&fact.tags));
     facts
         .declarations

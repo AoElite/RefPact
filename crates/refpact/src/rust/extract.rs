@@ -257,18 +257,24 @@ impl<'a> Extractor<'a> {
                     format!("may come through the glob import at line {line}")
                 }
             });
-            let reference = Reference {
-                aliases: self.resolver.aliases(&resolved.path),
-                target: resolved.path,
-                kind: kind.to_owned(),
-                certainty: if resolved.exact {
-                    Certainty::Exact
-                } else {
-                    Certainty::Candidate
-                },
-                properties: Vec::new(),
-            };
-            self.fact(span, note, What::Reference(reference));
+            let resolver = self.resolver;
+            resolver.alias_chains(&resolved.path, |chain, cfg| {
+                let before = self.conditions.len();
+                self.conditions.extend_from_slice(cfg);
+                let reference = Reference {
+                    aliases: chain.to_vec(),
+                    target: resolved.path.clone(),
+                    kind: kind.to_owned(),
+                    certainty: if resolved.exact {
+                        Certainty::Exact
+                    } else {
+                        Certainty::Candidate
+                    },
+                    properties: Vec::new(),
+                };
+                self.fact(span, note.clone(), What::Reference(reference));
+                self.conditions.truncate(before);
+            });
         }
     }
 

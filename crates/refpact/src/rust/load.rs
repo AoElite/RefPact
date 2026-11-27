@@ -478,7 +478,7 @@ impl Loader<'_> {
             Some(Read::File(outline)) => outline,
         };
         let test = test || outline.test;
-        let cfg = joined(cfg, &outline.cfg);
+        let cfg = cfg::joined(cfg, &outline.cfg);
         self.narrow(module, &cfg);
         self.modules[module].lines += outline.lines;
         self.modules[module]
@@ -556,7 +556,7 @@ impl Loader<'_> {
     ) -> Result<(), LoadError> {
         for step in steps {
             match step {
-                Step::Names(names) => self.modules[module].names.absorb(names),
+                Step::Names(names) => self.modules[module].names.absorb(names, cfg),
                 Step::Module {
                     name,
                     public,
@@ -569,7 +569,7 @@ impl Loader<'_> {
                 } => {
                     let child = self.child(module, name, *public);
                     let test = test || *own_test;
-                    let cfg = joined(cfg, own_cfg);
+                    let cfg = cfg::joined(cfg, own_cfg);
                     match content {
                         Some(steps) => {
                             self.narrow(child, &cfg);
@@ -645,17 +645,6 @@ impl Loader<'_> {
             })
         }
     }
-}
-
-/// The conditions around a declaration and its own, each one time.
-fn joined(outer: &[String], own: &[String]) -> Vec<String> {
-    let mut all = outer.to_vec();
-    for tag in own {
-        if !all.contains(tag) {
-            all.push(tag.clone());
-        }
-    }
-    all
 }
 
 #[derive(Default)]

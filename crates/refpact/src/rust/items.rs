@@ -267,8 +267,10 @@ impl Exports<'_> {
                 match self.resolver.module_at(&target) {
                     Some(child) => self.walk(child, &at(binding)),
                     None => {
-                        let definition = self.resolver.aliases(&target).pop().unwrap_or(target);
-                        self.record(definition, at(binding));
+                        let resolver = self.resolver;
+                        resolver.alias_chains(&target, |chain, _| {
+                            self.record(chain.last().unwrap_or(&target).clone(), at(binding));
+                        });
                     }
                 }
             }
