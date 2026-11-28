@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["cargo", "npm"],
+  "ignorePaths": ["fixtures/**"],
+  "timezone": "Etc/UTC",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 2,
+  "automerge": false,
+  "stopUpdatingLabel": "stop-updating",
+  "packageRules": [
+    {
+      "description": "Start the pilot with patch updates",
+      "matchUpdateTypes": ["major", "minor", "digest", "pin", "pinDigest", "lockFileMaintenance", "rollback", "replacement", "bump"],
+      "enabled": false
+    }
+  ]
+}
